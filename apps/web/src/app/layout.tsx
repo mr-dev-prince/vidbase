@@ -23,8 +23,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${bricolage.variable} ${spaceMono.variable}`}>
-      <body className="flex min-h-dvh flex-col overflow-x-clip">
+    // Browser extensions (Grammarly, ColorZilla, dark-mode tools…) add
+    // attributes to <html> and <body> before React loads. This only ignores
+    // attribute differences on these two tags, not anything inside them.
+    <html
+      suppressHydrationWarning
+      lang="en"
+      className={`${bricolage.variable} ${spaceMono.variable}`}
+    >
+      <body
+        suppressHydrationWarning
+        className="flex min-h-dvh flex-col overflow-x-clip"
+      >
         {children}
       </body>
     </html>

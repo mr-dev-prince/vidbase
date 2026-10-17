@@ -17,6 +17,8 @@ interface VideoTileProps {
   stream?: MediaStream | null;
   /** Camera permission state, only relevant for the local tile. */
   mediaStatus?: MediaStatus;
+  /** WebRTC connection state, only relevant for remote tiles. */
+  linkState?: RTCPeerConnectionState;
 }
 
 const LOCAL_NOTICE: Partial<Record<MediaStatus, string>> = {
@@ -24,17 +26,35 @@ const LOCAL_NOTICE: Partial<Record<MediaStatus, string>> = {
   blocked: "camera blocked",
 };
 
+/** What to show on a remote tile until video is flowing. */
+function linkNotice(state: RTCPeerConnectionState | undefined) {
+  switch (state) {
+    case "connected":
+    case "closed":
+      return undefined;
+    case "disconnected":
+      return "reconnecting…";
+    case "failed":
+      return "can't connect";
+    default:
+      return "connecting…";
+  }
+}
+
 /** A participant pinned to the wall as a polaroid. */
 export function VideoTile({
   participant,
   index,
   stream,
   mediaStatus,
+  linkState,
 }: VideoTileProps) {
   const { isLocal, isMuted, isCameraOff, isSpeaking, isHandRaised } =
     participant;
   const showVideo = stream && !isCameraOff;
-  const notice = isLocal && mediaStatus ? LOCAL_NOTICE[mediaStatus] : undefined;
+  const notice = isLocal
+    ? mediaStatus && LOCAL_NOTICE[mediaStatus]
+    : linkNotice(linkState);
 
   return (
     <figure

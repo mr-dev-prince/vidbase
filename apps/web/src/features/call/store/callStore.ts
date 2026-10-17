@@ -23,6 +23,12 @@ interface CallState {
   peers: PeerInfo[];
   /** Who was inside when we were turned away from a full room. */
   occupants: PeerInfo[];
+  /** Goes up on every (re)join, so WebRTC knows to start a fresh mesh. */
+  joinId: number;
+  /** Video/audio received from each peer, by peer id. */
+  remoteStreams: Record<string, MediaStream>;
+  /** WebRTC connection state to each peer, by peer id. */
+  linkStates: Record<string, RTCPeerConnectionState>;
 }
 
 interface CallActions {
@@ -35,6 +41,9 @@ interface CallActions {
   peerLeft: (peerId: string) => void;
   peerUpdated: (peer: PeerInfo) => void;
   patchSelf: (patch: Partial<PeerMediaState>) => void;
+  setRemoteStream: (peerId: string, stream: MediaStream) => void;
+  setLinkState: (peerId: string, state: RTCPeerConnectionState) => void;
+  clearMedia: () => void;
   reset: () => void;
 }
 
@@ -45,7 +54,15 @@ const initialState: CallState = {
   self: null,
   peers: [],
   occupants: [],
+  joinId: 0,
+  remoteStreams: {},
+  linkStates: {},
 };
+
+function without<T>(record: Record<string, T>, key: string) {
+  const { [key]: _removed, ...rest } = record;
+  return rest;
+}
 
 /**
  * Room state for the call UI. It only stores data: the socket wiring lives in
@@ -58,13 +75,14 @@ export const useCallStore = create<CallState & CallActions>()((set) => ({
     set({ ...initialState, roomId, status: "connecting" }),
 
   joined: (self, peers) =>
-    set({
+    set((state) => ({
       status: "joined",
       isReconnecting: false,
       self,
       peers,
       occupants: [],
-    }),
+      joinId: state.joinId + 1,
+    })),
 
   roomFull: (occupants) =>
     set({ status: "full", isReconnecting: false, peers: [], occupants }),
@@ -85,7 +103,11 @@ export const useCallStore = create<CallState & CallActions>()((set) => ({
     })),
 
   peerLeft: (peerId) =>
-    set((state) => ({ peers: state.peers.filter(({ id }) => id !== peerId) })),
+    set((state) => ({
+      peers: state.peers.filter(({ id }) => id !== peerId),
+      remoteStreams: without(state.remoteStreams, peerId),
+      linkStates: without(state.linkStates, peerId),
+    })),
 
   peerUpdated: (peer) =>
     set((state) => ({
@@ -96,6 +118,18 @@ export const useCallStore = create<CallState & CallActions>()((set) => ({
 
   patchSelf: (patch) =>
     set((state) => (state.self ? { self: { ...state.self, ...patch } } : {})),
+
+  setRemoteStream: (peerId, stream) =>
+    set((state) => ({
+      remoteStreams: { ...state.remoteStreams, [peerId]: stream },
+    })),
+
+  setLinkState: (peerId, linkState) =>
+    set((state) => ({
+      linkStates: { ...state.linkStates, [peerId]: linkState },
+    })),
+
+  clearMedia: () => set({ remoteStreams: {}, linkStates: {} }),
 
   reset: () => set(initialState),
 }));

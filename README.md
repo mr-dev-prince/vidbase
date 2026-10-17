@@ -38,6 +38,7 @@ Run one app only: `bunx turbo run dev --filter=@vidbase/web` (or `@vidbase/signa
 | Variable | App | Default |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SIGNALING_URL` | web | `http://localhost:4000` (set before building) |
+| `NEXT_PUBLIC_TURN_URL`, `_USERNAME`, `_CREDENTIAL` | web | empty (optional TURN relay; STUN-only without it) |
 | `PORT` | signaling | `4000` |
 | `CORS_ORIGIN` | signaling | `http://localhost:3000` (comma-separated list) |
 

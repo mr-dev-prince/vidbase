@@ -12,12 +12,14 @@ import { useFloatingReactions } from "@/hooks/useFloatingReactions";
 import { useLocalMedia } from "@/hooks/useLocalMedia";
 import { CALL_CHAT_SEED, ME } from "@/lib/mock-data";
 import type { Participant } from "@/types";
+import { usePeerMesh } from "../hooks/usePeerMesh";
 import { shareMediaState } from "../services/roomSession";
 import { useCallStore } from "../store/callStore";
 import type { CallPanel } from "../types";
 import { CallTopBar } from "./CallTopBar";
 import { ControlDock } from "./ControlDock";
 import { PeopleList } from "./PeopleList";
+import { RemoteAudio } from "./RemoteAudio";
 import { VideoWall } from "./VideoWall";
 
 /** The in-call screen. Rendered only once the server has given you a seat. */
@@ -26,7 +28,11 @@ export function CallSession({ roomId }: { roomId: string }) {
   const self = useCallStore((state) => state.self);
   const peers = useCallStore((state) => state.peers);
   const isReconnecting = useCallStore((state) => state.isReconnecting);
+  const remoteStreams = useCallStore((state) => state.remoteStreams);
+  const linkStates = useCallStore((state) => state.linkStates);
   const media = useLocalMedia();
+  // Sends your camera/mic to everyone and receives theirs (WebRTC).
+  usePeerMesh(media.stream);
   const elapsedSeconds = useElapsedSeconds();
   const { reactions, fire } = useFloatingReactions();
   // Chat is still local-only; it isn't sent over the socket yet.
@@ -73,8 +79,11 @@ export function CallSession({ roomId }: { roomId: string }) {
               localStream={media.stream}
               localStatus={media.status}
               screenStream={media.screenStream}
+              remoteStreams={remoteStreams}
+              linkStates={linkStates}
             />
           </main>
+          <RemoteAudio streams={Object.values(remoteStreams)} />
           <ReactionLayer reactions={reactions} />
           <ControlDock
             className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2"

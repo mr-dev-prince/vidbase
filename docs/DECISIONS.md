@@ -28,3 +28,21 @@
     - Why: out of scope for the first backend step; messages aren't sent over the socket yet.
 15. **No database: remove Prisma/PostgreSQL**
     - Why: it's a hobby project for learning WebRTC and video calling; rooms, names and media state are short-lived and live in memory or the browser, and there are no accounts.
+16. **Static `app/robots.txt` that keeps crawlers out of `/call/` and `/studio`**
+    - Why: call rooms are private, short-lived links and the studio is a tool, not content; it's not security (room codes still have to be unguessable), and with no site URL yet there's no sitemap, so a generated `robots.ts` isn't needed.
+17. **Mesh topology: every browser connects directly to every other browser**
+    - Why: no media server to run or pay for, and it's the clearest way to learn WebRTC; fine for the 5-person cap (4 uploads per person).
+18. **Only the newcomer makes offers; people already in the room only answer**
+    - Why: two sides can never offer at the same time ("glare"), so we don't need the more complex "perfect negotiation" pattern.
+19. **Two fixed transceivers (audio + video) per connection; change media with `replaceTrack`**
+    - Why: the camera often becomes ready after the connection starts, and swapping tracks needs no renegotiation, which keeps the handshake one-way.
+20. **Apply incoming signals one at a time per connection (promise chain)**
+    - Why: WebRTC calls are async, and an ICE candidate applied before its offer would throw.
+21. **Google's public STUN servers by default; TURN only via optional `NEXT_PUBLIC_TURN_*` env**
+    - Why: STUN is free and enough for most home networks; TURN relays media and costs bandwidth, so it's opt-in.
+22. **Play remote audio through hidden `<audio>` elements; keep every `<video>` muted**
+    - Why: you still hear people whose camera is off, and the browser's autoplay block is handled in one place ("Tap to hear everyone").
+23. **Start a fresh mesh on every (re)join, keyed by a `joinId` counter in the store**
+    - Why: a reconnect gives you a new socket id, so others treat you as a newcomer; rebuilding is simpler than patching old connections.
+17. **`suppressHydrationWarning` on `<html>` and `<body>` in the root layout**
+    - Why: the hydration error came from browser extensions adding attributes to those tags (pages hydrate cleanly in a browser without extensions); the flag only ignores those two tags' own attributes, so real mismatches inside the page still show up.

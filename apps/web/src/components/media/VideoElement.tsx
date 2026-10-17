@@ -11,7 +11,10 @@ interface VideoElementProps {
   className?: string;
 }
 
-/** Plays a MediaStream. Always muted: local audio must never echo back. */
+/**
+ * Plays the video of a MediaStream. Always muted: your own mic must never
+ * echo back, and other people's sound is played by RemoteAudio instead.
+ */
 export function VideoElement({
   stream,
   mirrored,

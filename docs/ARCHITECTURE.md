@@ -2,7 +2,7 @@
 
 vidbase is a video-call app. Someone creates a room, shares the room code, and up to **5 people** join the same call. This doc explains how the pieces fit together.
 
-> **Status:** people in a room can see each other join and leave, and see each other's mic/camera/hand state live. Actual video between browsers (WebRTC) is the next step: the server can already relay the WebRTC handshake, but the browser doesn't send one yet, so other people show as avatars.
+> **Status:** people in a room see and hear each other live over WebRTC, and see each other's mic/camera/hand state. Every browser connects directly to every other browser (a "mesh").
 
 ---
 
@@ -38,7 +38,7 @@ flowchart LR
 Two kinds of traffic flow in a call:
 
 - **Signaling** (small messages: "I joined", "I muted", WebRTC handshakes) goes through the signaling server.
-- **Media** (video and audio) will go **directly between browsers** with WebRTC. It never touches our servers.
+- **Media** (video and audio) goes **directly between browsers** with WebRTC. It never touches our servers.
 
 ```mermaid
 flowchart LR
@@ -46,10 +46,12 @@ flowchart LR
   B["Browser B"] -- "page load" --> W
   A <-- "Socket.IO<br/>(signaling)" --> S["Signaling server"]
   B <-- "Socket.IO<br/>(signaling)" --> S
-  A <-. "WebRTC video/audio<br/>(next step)" .-> B
+  A <== "WebRTC video + audio<br/>(direct)" ==> B
+  A -. "what's my public address?" .-> STUN["Google STUN<br/>(free, public)"]
+  B -.-> STUN
 ```
 
-The web app and the signaling server are deployed separately. The web app finds the server through the `NEXT_PUBLIC_SIGNALING_URL` environment variable.
+The web app and the signaling server are deployed separately. The web app finds the server through the `NEXT_PUBLIC_SIGNALING_URL` environment variable. The STUN server only helps each browser discover its public network address (see section 7).
 
 ---
 
@@ -69,6 +71,9 @@ flowchart TD
   store -- "self + peers" --> call
   call -- "shareMediaState()" --> session
   session <--> socket["lib/socket.ts<br/>one shared Socket.IO connection"]
+  call -- "usePeerMesh(camera)" --> mesh["webrtc/PeerMesh.ts<br/>one PeerLink per person"]
+  mesh -- "sendSignal / onSignal" --> session
+  mesh -- "remote streams + link states" --> store
 ```
 
 - **`lib/socket.ts`** creates the single Socket.IO connection, pointed at `NEXT_PUBLIC_SIGNALING_URL`.
@@ -76,6 +81,8 @@ flowchart TD
 - **`store/callStore.ts`** is a [Zustand](https://zustand.docs.pmnd.rs) store. It only holds data (who's in the room, the connection status) plus simple setters.
 - **`CallRoom`** shows a loader, the call, the "room full" screen or a connection problem, depending on the store's `status`.
 - **`CallSession`** is the call UI. It asks for your camera **only after** the server has given you a seat, and it reports your mic/camera/hand changes through `shareMediaState()`.
+- **`hooks/usePeerMesh.ts`** runs WebRTC while you're in the call: it creates the mesh, feeds it your camera, and connects it to the socket and the store (section 7).
+- **`RemoteAudio`** plays everyone's voice through hidden `<audio>` elements (section 7).
 - **`services/guestProfile.ts`** gives you a random name and color (like "Groovy Llama"), kept per browser tab. A second tab acts as a different person, which makes local testing easy.
 
 ### Room status
@@ -132,23 +139,86 @@ sequenceDiagram
 
 Pressing **Leave** sends `room:leave`. Closing the tab or losing the connection counts as leaving too. Either way, everyone else gets `peer:left` and the tile disappears.
 
-## 7. Relaying WebRTC messages (ready, not used yet)
+## 7. Video between browsers (WebRTC)
 
-To start a video connection, two browsers swap an **offer**, an **answer** and some **ICE candidates** (network addresses). The server just passes these along:
+### 7.1 The mesh
+
+Every person has one direct WebRTC connection to every other person. With 5 people that's 4 connections each (10 in total). Each browser uploads its video once **per person**, which is fine for small calls but is why the room is capped. Big apps send video to a media server (an "SFU") instead, which forwards it.
+
+```mermaid
+flowchart LR
+  A((A)) <--> B((B))
+  A <--> C((C))
+  B <--> C
+```
+
+The code is split in two:
+
+- **`webrtc/PeerLink.ts`**: one `RTCPeerConnection` to **one** person. It runs the handshake, sends your tracks and collects theirs.
+- **`webrtc/PeerMesh.ts`**: a map of `PeerLink`s, one per person. It routes each incoming message to the right link and passes your camera to all of them. It doesn't know about sockets or React.
+
+### 7.2 The handshake
+
+To connect, two browsers swap three kinds of messages through the signaling server:
+
+1. **Offer**: an SDP text describing what I'll send and receive (audio + video, codecs, encryption keys).
+2. **Answer**: the other side's matching SDP.
+3. **ICE candidates**: network addresses where I might be reachable (my local address, and my public address learned from the STUN server).
 
 ```mermaid
 sequenceDiagram
-  participant A as Browser A
+  participant N as Newcomer
   participant S as Signaling server
-  participant B as Browser B
-  A->>S: signal { to: B, offer }
-  S->>B: signal { from: A, offer }
-  B->>S: signal { to: A, answer }
-  S->>A: signal { from: B, answer }
-  Note over A,B: then video flows directly A ↔ B
+  participant E as Someone already in the room
+  N->>S: room:join
+  S-->>N: ok + list of people already inside
+  Note over N: one PeerLink per person, as the offerer
+  N->>S: signal { to: E, offer }
+  S->>E: signal { from: N, offer }
+  Note over E: no link yet, so it creates one as the answerer
+  E->>S: signal { to: N, answer }
+  S->>N: signal { from: E, answer }
+  N-->>E: ICE candidates (both ways, via the server)
+  Note over N,E: the browsers test the addresses, pick one that works,<br/>then video and audio flow directly
 ```
 
-The server only relays a message when **both** browsers are in the same room, and it never reads the contents.
+The server only relays a `signal` when **both** browsers are in the same room, and it never reads the contents.
+
+### 7.3 Who makes the offer
+
+**The person who just joined offers to everyone already in the room. The others only ever answer.** If both sides of a pair could offer, they might do it at the same moment ("glare") and need extra back-off logic (the "perfect negotiation" pattern). Making only one side offer avoids that problem entirely.
+
+### 7.4 Fixed lanes + `replaceTrack`
+
+The offerer creates exactly two **transceivers** ("lanes"), one for audio and one for video, each sending and receiving. The answerer gets the same lanes from the offer and puts its own tracks in them.
+
+Your camera often becomes ready **after** the connection starts (the browser is still asking for permission). That doesn't need a new offer: we call `sender.replaceTrack(newTrack)` to swap what plays in a lane. Muting doesn't touch the connection at all: the track is just disabled (`track.enabled = false`), so it sends silence or black frames, and the `peer:update` event tells everyone to show the mute icon or avatar.
+
+### 7.5 Doing things in order
+
+WebRTC calls are asynchronous. If an ICE candidate is applied before the offer has finished processing, the browser throws an error. So each `PeerLink` applies incoming messages **one at a time**, in arrival order, using a promise chain.
+
+### 7.6 Hearing people
+
+Every `<video>` element is muted, so your own mic never echoes back and tiles can swap to an avatar freely. Other people's sound plays through **hidden `<audio>` elements** in `RemoteAudio`, one per person, so you still hear someone whose camera is off.
+
+Browsers block sound until you've interacted with the page. If playback is blocked (e.g. you opened a shared link directly), a **"Tap to hear everyone"** button appears, and one click starts all audio.
+
+### 7.7 When things go wrong
+
+| Situation | What happens |
+| --- | --- |
+| Connection still setting up | The tile shows "connecting…". |
+| Network blip | The tile shows "reconnecting…" until WebRTC recovers by itself. |
+| Connection failed | The offerer calls `restartIce()`, which sends a fresh offer with new network candidates. |
+| Someone leaves | Their link is closed and their stream and audio removed. |
+| Your socket reconnects | The server gives you a new id, so everyone treats you as a newcomer. `usePeerMesh` throws away the old mesh and offers to everyone again. |
+
+### 7.8 STUN and TURN
+
+Most devices sit behind a router (NAT) and only know their private address. A **STUN** server tells a browser its public address so the other side can reach it. We use Google's free public STUN servers (`webrtc/iceServers.ts`).
+
+On some networks (strict firewalls, "symmetric" NATs) no direct path exists at all. Then a **TURN** server is needed: it relays the video itself, which costs bandwidth, so there's no free public one. vidbase works without it on most home networks. To add one, set the `NEXT_PUBLIC_TURN_*` variables (section 9).
 
 ---
 
@@ -189,6 +259,7 @@ All of these are typed in `packages/shared/src/signaling.ts`.
 | Variable | Used by | Meaning |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SIGNALING_URL` | `apps/web` | Where the browser finds the signaling server. Baked in at build time, so set it before `next build`. Default `http://localhost:4000`. |
+| `NEXT_PUBLIC_TURN_URL`, `NEXT_PUBLIC_TURN_USERNAME`, `NEXT_PUBLIC_TURN_CREDENTIAL` | `apps/web` | Optional TURN relay for networks where a direct connection is impossible. Empty means STUN only. |
 | `PORT` | `apps/signaling` | Port to listen on. Default `4000`; most hosts set it for you. |
 | `CORS_ORIGIN` | `apps/signaling` | Web app address(es) allowed to connect, comma-separated. Default `http://localhost:3000`. |
 
@@ -210,7 +281,9 @@ flowchart LR
 
 ## 11. Not built yet
 
-- **Video between browsers.** WebRTC peer connections aren't created yet, so other people show as avatars. The server-side relay is ready.
+- **Screen sharing to others.** Your screen share only shows on your own screen; it isn't sent over WebRTC yet.
+- **Real "speaking" detection.** The speaking indicator isn't driven by actual audio levels.
+- **TURN by default.** Calls between some strict networks can fail until a TURN server is configured.
 - **In-call chat** is local only and isn't sent to anyone.
 - **Accounts.** Names are random per tab. There is no database on purpose: everything in a call is short-lived (see decision #15).
 - **Live streaming pages** (`/studio`, `/live/...`) still use placeholder data.

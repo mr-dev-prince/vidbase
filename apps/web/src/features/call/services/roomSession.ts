@@ -6,6 +6,7 @@ import {
   type JoinRoomResult,
   type PeerMediaState,
   type PeerProfile,
+  type SignalPayload,
 } from "@vidbase/shared";
 import { getSocket } from "@/lib/socket";
 import { useCallStore } from "../store/callStore";
@@ -105,6 +106,29 @@ export function joinRoom(roomId: string, profile: PeerProfile): () => void {
 export function knockAgain() {
   useCallStore.setState({ status: "connecting", occupants: [] });
   getSocket().connect();
+}
+
+/** Sends a WebRTC handshake message to one peer (the server relays it). */
+export function sendSignal(to: string, payload: SignalPayload) {
+  getSocket().emit("signal", { to, payload });
+}
+
+/** Listens for WebRTC handshake messages. Returns a function to stop. */
+export function onSignal(
+  handler: (from: string, payload: SignalPayload) => void,
+) {
+  const socket = getSocket();
+  const listener = ({
+    from,
+    payload,
+  }: {
+    from: string;
+    payload: SignalPayload;
+  }) => handler(from, payload);
+  socket.on("signal", listener);
+  return () => {
+    socket.off("signal", listener);
+  };
 }
 
 /** Shares a change to your mic/camera/hand with the room. */

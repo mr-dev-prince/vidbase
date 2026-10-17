@@ -13,6 +13,9 @@ interface VideoWallProps {
   localStream: MediaStream | null;
   localStatus: MediaStatus;
   screenStream: MediaStream | null;
+  /** Streams received over WebRTC, by peer id. */
+  remoteStreams: Record<string, MediaStream>;
+  linkStates: Record<string, RTCPeerConnectionState>;
 }
 
 function columnsFor(seats: number) {
@@ -29,6 +32,8 @@ export function VideoWall({
   localStream,
   localStatus,
   screenStream,
+  remoteStreams,
+  linkStates,
 }: VideoWallProps) {
   const openSeats = Array.from(
     { length: Math.max(0, capacity - participants.length) },
@@ -51,8 +56,13 @@ export function VideoWall({
             <VideoTile
               participant={participant}
               index={index}
-              stream={participant.isLocal ? localStream : null}
+              stream={
+                participant.isLocal
+                  ? localStream
+                  : remoteStreams[participant.id]
+              }
               mediaStatus={participant.isLocal ? localStatus : undefined}
+              linkState={linkStates[participant.id]}
             />
           </li>
         ))}
