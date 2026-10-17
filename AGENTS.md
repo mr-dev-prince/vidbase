@@ -22,3 +22,12 @@ Format:
 1. **<Decision>**
    - Why: <reason>
 ```
+
+## Keep the architecture doc current
+
+Whenever you add or change how the app is put together (new modules, data flow, signaling/media paths, external services), update `docs/ARCHITECTURE.md`:
+
+- Use simple, plain words — explain it so someone new to the project can follow.
+- Show structure and flow with Mermaid diagrams (` ```mermaid ` blocks): e.g. `flowchart` for components, `sequenceDiagram` for connection/signaling steps.
+- Keep each diagram small and focused; split big ones into several.
+- Edit the existing sections to match the code — don't just append. Remove anything that is no longer true.

@@ -1,50 +1,60 @@
 # vidbase
 
-Next.js app (App Router, TypeScript, Tailwind CSS) using Bun and Biome.
+Funky video calls for up to 5 people. A Turborepo monorepo using Bun, TypeScript and Biome.
 
-## Scripts
+| Package | What it is |
+| --- | --- |
+| `apps/web` | Next.js app (App Router, Tailwind, Zustand, Prisma). Deploys to Vercel. |
+| `apps/signaling` | Socket.IO signaling server, run with Bun. Deploys to any host that keeps a process running. |
+| `packages/shared` | `@vidbase/shared`: socket event types and room rules used by both apps. |
+
+How it all fits together: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Why things are the way they are: [docs/DECISIONS.md](docs/DECISIONS.md).
+
+## Getting started
 
 ```bash
-bun install      # install dependencies
-bun dev          # start dev server at http://localhost:3000
-bun run build    # production build
-bun start        # serve production build
-bun run lint     # biome check
-bun run format   # biome format --write
+bun install
+cp apps/web/.env.example apps/web/.env
+cp apps/signaling/.env.example apps/signaling/.env
+bun run dev        # web on http://localhost:3000, signaling on http://localhost:4000
 ```
+
+Open a room in two browser tabs to see two people in the same call.
+
+## Scripts (run from the repo root)
+
+```bash
+bun run dev        # start every app in watch mode
+bun run build      # build everything
+bun run typecheck  # type-check every package
+bun run lint       # biome check
+bun run format     # biome format --write
+```
+
+Run one app only: `bunx turbo run dev --filter=@vidbase/web` (or `@vidbase/signaling`).
+
+## Environment
+
+| Variable | App | Default |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SIGNALING_URL` | web | `http://localhost:4000` (set before building) |
+| `DATABASE_URL` | web | PostgreSQL connection string |
+| `PORT` | signaling | `4000` |
+| `CORS_ORIGIN` | signaling | `http://localhost:3000` (comma-separated list) |
 
 ## Database
 
-PostgreSQL via [Prisma](https://www.prisma.io) (`prisma/schema.prisma`, config in `prisma7.config.ts`).
-
-1. Copy `.env.example` to `.env` and set `DATABASE_URL`.
-2. Add models to `prisma/schema.prisma`, then run `bun run db:migrate`.
-3. Import the client with `import { prisma } from "@/lib/prisma"`.
+PostgreSQL via [Prisma](https://www.prisma.io), inside `apps/web` (`prisma/schema.prisma`, config in `prisma7.config.ts`). No models yet.
 
 ```bash
-bun run db:generate  # regenerate the client (also runs on install)
+cd apps/web
 bun run db:migrate   # create and apply a migration
-bun run db:push      # sync schema without a migration
 bun run db:studio    # open Prisma Studio
 ```
 
-## Project structure
+Import the client with `import { prisma } from "@/lib/prisma"`.
 
-```text
-src/
-  app/                 routes only: thin pages that compose features
-    (site)/            pages with the site header/footer (home, studio, live/[streamId])
-    call/[roomId]/     full-screen call room
-  components/
-    ui/                design-system primitives (Button, Sticker, TvFrame, Ticket, Receipt…)
-    media/             video/reaction building blocks (VideoElement, ReactionLayer…)
-    layout/            site header, footer, logo
-  features/            one folder per feature, each with its own components/ and hooks/
-    home/  call/  stream/  chat/
-  hooks/               shared hooks (useLocalMedia, useElapsedSeconds, …)
-  lib/                 helpers, theme class maps, mock data, Prisma client
-  types/               shared TypeScript types
-```
+## Deploying
 
-Design tokens (colors, fonts, hard shadows, animations, paper textures) live in `src/app/globals.css`.
-Remote participants, streams and chat are mocked in `src/lib/mock-data.ts` until real signaling exists; your own camera, mic and screen share are real.
+1. **Signaling server:** deploy `apps/signaling` to a host that supports Bun (Railway, Render, Fly…), start command `bun run start`. Set `CORS_ORIGIN` to your web app's URL.
+2. **Web app:** deploy to Vercel with root directory `apps/web`. Set `NEXT_PUBLIC_SIGNALING_URL` to the signaling server's public URL.
