@@ -68,7 +68,7 @@ export function VideoTile({
 
       <div
         className={cn(
-          "relative grid aspect-[4/3] place-items-center overflow-hidden border-2 border-ink",
+          "relative grid aspect-4/3 place-items-center overflow-hidden border-2 border-ink",
           accentBg[participant.accent],
         )}
       >

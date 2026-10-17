@@ -65,13 +65,13 @@ flowchart TD
   room -- "useRoomSession(roomId)" --> session["services/roomSession.ts<br/>the only code that talks to the socket"]
   session -- "calls actions" --> store["store/callStore.ts<br/>Zustand store: status, you, other peers"]
   store -- "status" --> room
-  room --> call["CallSession<br/>the call itself"]
+  room --> callSession["CallSession<br/>the call itself"]
   room --> full["RoomFull"]
   room --> problem["ConnectionProblem"]
-  store -- "self + peers" --> call
-  call -- "shareMediaState()" --> session
+  store -- "self + peers" --> callSession
+  callSession -- "shareMediaState()" --> session
   session <--> socket["lib/socket.ts<br/>one shared Socket.IO connection"]
-  call -- "usePeerMesh(camera)" --> mesh["webrtc/PeerMesh.ts<br/>one PeerLink per person"]
+  callSession -- "usePeerMesh(camera)" --> mesh["webrtc/PeerMesh.ts<br/>one PeerLink per person"]
   mesh -- "sendSignal / onSignal" --> session
   mesh -- "remote streams + link states" --> store
 ```
