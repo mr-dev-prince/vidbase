@@ -6,7 +6,15 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-8 sm:px-8">
         <Logo />
         <p className="font-mono text-xs uppercase tracking-widest text-paper/70">
-          Built with getUserMedia &amp; questionable taste
+          Built by{" "}
+          <a
+            href="https://devprince.space"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-4 hover:text-paper hover:underline"
+          >
+            devprince.space
+          </a>
         </p>
       </div>
     </footer>

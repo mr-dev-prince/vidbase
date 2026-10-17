@@ -25,7 +25,7 @@ flowchart LR
 
 | Folder | What it is |
 | --- | --- |
-| `apps/web` | The website: pages, UI, the call room. Also holds Prisma (database setup, no tables yet). |
+| `apps/web` | The website: pages, UI, the call room. |
 | `apps/signaling` | A small server that tells browsers who is in which room and passes messages between them. |
 | `packages/shared` | Code both apps import: the list of socket events, their data shapes, the 5-person limit, room-code rules and the color palette. |
 
@@ -189,7 +189,6 @@ All of these are typed in `packages/shared/src/signaling.ts`.
 | Variable | Used by | Meaning |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SIGNALING_URL` | `apps/web` | Where the browser finds the signaling server. Baked in at build time, so set it before `next build`. Default `http://localhost:4000`. |
-| `DATABASE_URL` | `apps/web` | PostgreSQL connection for Prisma (not used by any feature yet). |
 | `PORT` | `apps/signaling` | Port to listen on. Default `4000`; most hosts set it for you. |
 | `CORS_ORIGIN` | `apps/signaling` | Web app address(es) allowed to connect, comma-separated. Default `http://localhost:3000`. |
 
@@ -213,5 +212,5 @@ flowchart LR
 
 - **Video between browsers.** WebRTC peer connections aren't created yet, so other people show as avatars. The server-side relay is ready.
 - **In-call chat** is local only and isn't sent to anyone.
-- **Accounts.** Names are random per tab.
+- **Accounts.** Names are random per tab. There is no database on purpose: everything in a call is short-lived (see decision #15).
 - **Live streaming pages** (`/studio`, `/live/...`) still use placeholder data.

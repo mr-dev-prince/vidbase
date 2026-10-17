@@ -4,7 +4,7 @@ Funky video calls for up to 5 people. A Turborepo monorepo using Bun, TypeScript
 
 | Package | What it is |
 | --- | --- |
-| `apps/web` | Next.js app (App Router, Tailwind, Zustand, Prisma). Deploys to Vercel. |
+| `apps/web` | Next.js app (App Router, Tailwind, Zustand). Deploys to Vercel. |
 | `apps/signaling` | Socket.IO signaling server, run with Bun. Deploys to any host that keeps a process running. |
 | `packages/shared` | `@vidbase/shared`: socket event types and room rules used by both apps. |
 
@@ -38,21 +38,8 @@ Run one app only: `bunx turbo run dev --filter=@vidbase/web` (or `@vidbase/signa
 | Variable | App | Default |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SIGNALING_URL` | web | `http://localhost:4000` (set before building) |
-| `DATABASE_URL` | web | PostgreSQL connection string |
 | `PORT` | signaling | `4000` |
 | `CORS_ORIGIN` | signaling | `http://localhost:3000` (comma-separated list) |
-
-## Database
-
-PostgreSQL via [Prisma](https://www.prisma.io), inside `apps/web` (`prisma/schema.prisma`, config in `prisma7.config.ts`). No models yet.
-
-```bash
-cd apps/web
-bun run db:migrate   # create and apply a migration
-bun run db:studio    # open Prisma Studio
-```
-
-Import the client with `import { prisma } from "@/lib/prisma"`.
 
 ## Deploying
 

@@ -26,3 +26,5 @@
     - Why: it runs TypeScript and loads `.env` without a build step; the host must support Bun.
 14. **Keep the in-call chat local-only for now**
     - Why: out of scope for the first backend step; messages aren't sent over the socket yet.
+15. **No database: remove Prisma/PostgreSQL**
+    - Why: it's a hobby project for learning WebRTC and video calling; rooms, names and media state are short-lived and live in memory or the browser, and there are no accounts.
