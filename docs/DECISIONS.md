@@ -78,3 +78,31 @@
     - Why: in production every connection arrives from `cloudflared` on the Pi, so the socket address alone would put all users behind one IP; trusting the header only on loopback stops anyone who reaches the server directly from faking it, with no config needed.
 38. **Cap floating reactions at 30 on screen in the browser**
     - Why: the server limit is per socket, so several sockets (or IPs) can still add up to a flood; dropping the oldest emoji keeps the page from freezing.
+39. **Live streams go through Cloudflare Realtime SFU; our signaling server (Pi) only sets up SFU sessions and relays SDP**
+    - Why: the Cloudflare Tunnel in front of the Pi only carries HTTP/WebSockets, not the UDP that WebRTC media needs, and home upload (~100 Mbps → ~50–60 viewers at 720p) can't serve hundreds; browser-to-browser tops out ~10 viewers. Cloudflare's SFU is free up to 1,000 GB/month, then $0.05/GB, and we already use Cloudflare.
+40. **Cap live streams at 500 viewers (`MAX_VIEWERS`)**
+    - Why: the video doesn't touch the Pi, so the limit is the Pi's socket and chat fan-out, which 500 handles comfortably with stream-wide chat/reaction limits and a once-a-second viewer count; it also bounds Cloudflare cost per stream.
+41. **The Cloudflare app secret lives only on the signaling server (`CLOUDFLARE_REALTIME_APP_ID/SECRET`); browsers send SDP to the SFU through our socket**
+    - Why: the secret can create sessions on our bill, so it must never ship to the browser; the server also enforces the viewer cap and decides who may subscribe.
+42. **One Cloudflare session per broadcaster (send-only audio + video) and one per viewer (pulls both tracks); the viewer's session is offered by the SFU and answered via `stream:answer` → `PUT renegotiate`**
+    - Why: it's Cloudflare's documented publish/subscribe recipe; fixed lanes mean muting just disables the track and never renegotiates (like #19).
+43. **Wait for ICE gathering before sending SDP to the SFU (max 3 s), no trickle ICE**
+    - Why: the SFU API takes one SDP per request, so the browser's addresses must already be inside it.
+44. **A socket is in one call or one stream at a time; chat/reactions go to its "channel" with the author taken from its join/watch profile**
+    - Why: one code path relays chat and reactions for both calls and streams, and nobody can be in two places or fake a name.
+45. **Stream-wide limits (chat burst 20, +10/s; reactions burst 30, +15/s) and the viewer count sent at most once a second**
+    - Why: with 500 viewers each message goes to everyone; per-socket limits alone would still allow 500 × 500 messages a second.
+46. **The home page reads the live list from `GET /streams` on the signaling server (CORS for `CORS_ORIGIN`), polled every 10 s and shared by the ticker and the wall**
+    - Why: a plain HTTP read is simpler than keeping a socket open on the home page, and 10 s is fresh enough for a "who's live" list.
+47. **If the broadcaster's connection drops, the stream ends (no resume)**
+    - Why: a reconnect gets a new socket and a new SFU session; resuming would need a grace period and session handover. Viewers do reconnect and tune in again automatically.
+48. **Remove all placeholder stream data (`mock-data.ts`, fake audience chatter/viewers, follow button, tags); move `guestProfile` to `lib/` and `RemoteAudio` to `components/media/`**
+    - Why: streams are real now, and both features need a guest name and remote audio.
+49. **Cap streaming at a monthly budget (`STREAM_BUDGET_GB`, default 900 GB) estimated on our server: viewer-seconds × the most a viewer can receive**
+    - Why: Cloudflare's free allowance is 1,000 GB/month; counting viewer-time needs no extra Cloudflare token or analytics API, and the 100 GB margin covers estimate error. At the limit new streams/viewers are refused and live streams end with an "out of airtime" message.
+50. **Cap the broadcaster's video at 1.2 Mbps (`STREAM_VIDEO_MAX_BITRATE`, via `sendEncodings.maxBitrate`) and budget 1.2 Mbps + 64 kbps audio + 15% overhead ≈ 0.65 GB per viewer-hour**
+    - Why: the estimate is only safe if every viewer receives at most that; 1.2 Mbps is still good 720p. A modified client could ignore the cap, which is the known gap in an estimate-based budget.
+51. **Save the month's usage to `apps/signaling/data/usage.json` (gitignored), written atomically once a minute and on shutdown; resets on the 1st (UTC); an unreadable file pauses streaming**
+    - Why: an in-memory count would reset on every restart and could overspend; a small JSON file is enough (no database, #15). Failing safe beats a surprise bill.
+52. **Lower the viewer cap from 500 to 100 per stream at a time (`MAX_VIEWERS`; changes #40)**
+    - Why: a smaller audience per stream keeps one stream from eating the monthly free allowance (100 viewers ≈ 65 GB/hour, so one full stream lasts ~14 hours on the 900 GB budget instead of ~3) and lightens chat fan-out on the Pi.

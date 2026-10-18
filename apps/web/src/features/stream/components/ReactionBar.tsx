@@ -1,8 +1,12 @@
-import { REACTION_EMOJIS } from "@/lib/reactions";
+import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/reactions";
 import { tilt } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-export function ReactionBar({ onReact }: { onReact: (emoji: string) => void }) {
+export function ReactionBar({
+  onReact,
+}: {
+  onReact: (emoji: ReactionEmoji) => void;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span className="font-mono text-xs font-bold uppercase tracking-widest">

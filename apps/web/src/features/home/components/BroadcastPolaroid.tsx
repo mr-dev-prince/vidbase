@@ -1,3 +1,4 @@
+import type { StreamInfo } from "@vidbase/shared";
 import { Eye } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
@@ -5,20 +6,16 @@ import { LiveBadge } from "@/components/ui/LiveBadge";
 import { Tape } from "@/components/ui/Tape";
 import { accentAt, accentBg, tilt } from "@/lib/theme";
 import { cn, formatCount } from "@/lib/utils";
-import type { Broadcast } from "@/types";
 
 interface BroadcastPolaroidProps {
-  broadcast: Broadcast;
+  stream: StreamInfo;
   index: number;
 }
 
-export function BroadcastPolaroid({
-  broadcast,
-  index,
-}: BroadcastPolaroidProps) {
+export function BroadcastPolaroid({ stream, index }: BroadcastPolaroidProps) {
   return (
     <Link
-      href={`/live/${broadcast.id}`}
+      href={`/live/${stream.id}`}
       className={cn(
         "group relative block border-2 border-ink bg-cream p-3 pb-5 shadow-hard transition duration-300",
         "hover:z-10 hover:-translate-y-2 hover:rotate-0 hover:shadow-hard-lg focus-visible:rotate-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky",
@@ -42,12 +39,12 @@ export function BroadcastPolaroid({
       <div
         className={cn(
           "relative grid aspect-[4/3] place-items-center overflow-hidden border-2 border-ink",
-          accentBg[broadcast.accent],
+          accentBg[stream.host.accent],
         )}
       >
         <div aria-hidden className="absolute inset-0 bg-dots" />
         <Avatar
-          person={broadcast.host}
+          person={stream.host}
           size="xl"
           animated
           className="relative transition duration-500 group-hover:scale-110 group-hover:rotate-6"
@@ -55,16 +52,16 @@ export function BroadcastPolaroid({
         <LiveBadge className="absolute top-3 left-3" />
         <span className="absolute right-3 bottom-3 inline-flex items-center gap-1 rounded-full border-2 border-ink bg-cream px-2 py-0.5 font-mono text-xs font-bold">
           <Eye aria-hidden className="size-3.5" />
-          {formatCount(broadcast.viewers)}
+          {formatCount(stream.viewers)}
         </span>
       </div>
 
       <div className="mt-4 px-1">
         <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-ink/60">
-          {broadcast.category} · {broadcast.host.name}
+          {stream.category} · {stream.host.name}
         </p>
         <h3 className="mt-1 font-display text-2xl font-extrabold leading-tight tracking-tight">
-          {broadcast.title}
+          {stream.title}
         </h3>
       </div>
     </Link>

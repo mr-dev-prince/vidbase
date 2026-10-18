@@ -1,7 +1,8 @@
 "use client";
 
+import { STREAM_CATEGORIES, type StreamCategory } from "@vidbase/shared";
 import { Mic, MicOff, Video, VideoOff } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ReactionLayer } from "@/components/media/ReactionLayer";
 import { IconButton } from "@/components/ui/IconButton";
 import { Rays } from "@/components/ui/Rays";
@@ -9,61 +10,69 @@ import { Receipt } from "@/components/ui/Receipt";
 import { Sticker } from "@/components/ui/Sticker";
 import { TvFrame } from "@/components/ui/TvFrame";
 import { ChatPanel } from "@/features/chat/components/ChatPanel";
-import { useChat } from "@/features/chat/hooks/useChat";
+import { SYSTEM_AUTHOR } from "@/features/chat/system";
 import { useElapsedSeconds } from "@/hooks/useElapsedSeconds";
-import { useFloatingReactions } from "@/hooks/useFloatingReactions";
+import { useGuestProfile } from "@/hooks/useGuestProfile";
 import { useLocalMedia } from "@/hooks/useLocalMedia";
-import { AUDIENCE_CHATTER, ME, SYSTEM } from "@/lib/mock-data";
-import { REACTION_EMOJIS } from "@/lib/reactions";
-import { randomItem } from "@/lib/utils";
-import { useAudience } from "../hooks/useAudience";
+import { type BroadcastProblem, useBroadcast } from "../hooks/useBroadcast";
+import { useStreamChat } from "../hooks/useStreamChat";
 import { BroadcastScreen } from "./BroadcastScreen";
 import { GoLiveButton } from "./GoLiveButton";
 import { OnAirSign } from "./OnAirSign";
-import {
-  STREAM_CATEGORIES,
-  type StreamCategory,
-  StreamSetup,
-} from "./StreamSetup";
+import { ShareStreamLink } from "./ShareStreamLink";
+import { StreamSetup } from "./StreamSetup";
 import { StudioStats } from "./StudioStats";
 import { ViewerCount } from "./ViewerCount";
+
+const PROBLEMS: Record<BroadcastProblem, string> = {
+  unavailable: "streaming isn't set up on the server yet",
+  "sfu-error": "couldn't reach the video service, try again",
+  "rate-limited": "too many tries, wait a few seconds",
+  unreachable: "can't reach the server",
+  lost: "connection lost, your stream ended",
+  "over-budget": "this month's free streaming time is used up, back on the 1st",
+  "invalid-request": "something went wrong, try again",
+  "not-found": "something went wrong, try again",
+  full: "something went wrong, try again",
+};
 
 /** The broadcaster's desk: preview, controls, setup and chat. */
 export function Studio() {
   const media = useLocalMedia();
-  const [isLive, setLive] = useState(false);
+  const profile = useGuestProfile();
   const [title, setTitle] = useState("My extremely cool stream");
   const [category, setCategory] = useState<StreamCategory>(
     STREAM_CATEGORIES[0],
   );
+  const broadcast = useBroadcast(media.stream);
+  const isLive = broadcast.status === "live";
   const elapsedSeconds = useElapsedSeconds(isLive);
-  const viewers = useAudience(0, { enabled: isLive, trend: 4 });
-  const { reactions, fire } = useFloatingReactions();
-  const chat = useChat({
-    me: ME,
-    chatter: AUDIENCE_CHATTER,
-    chatterEveryMs: 2200,
-    chatterEnabled: isLive,
-  });
+  const chat = useStreamChat(isLive, profile);
 
-  // Demo only: the "audience" throws emoji while you're live.
-  useEffect(() => {
-    if (!isLive) return;
-    const timer = setInterval(() => fire(randomItem(REACTION_EMOJIS)), 1800);
-    return () => clearInterval(timer);
-  }, [isLive, fire]);
-
-  const toggleLive = () => {
-    const next = !isLive;
-    setLive(next);
-    chat.post({
-      kind: "system",
-      author: SYSTEM,
-      text: next ? `you're live: ${title || "untitled"}` : "stream ended",
-    });
+  const toggleLive = async () => {
+    if (isLive) {
+      broadcast.end();
+      chat.post({
+        kind: "system",
+        author: SYSTEM_AUTHOR,
+        text: "stream ended",
+      });
+      return;
+    }
+    if (!profile) return;
+    const details = { title: title.trim() || "Untitled stream", category };
+    if (await broadcast.goLive(details, profile)) {
+      chat.post({
+        kind: "system",
+        author: SYSTEM_AUTHOR,
+        text: `you're live: ${details.title}`,
+      });
+    }
   };
 
   const preview = media.isCamOn ? media.stream : null;
+  const isConnectingVideo = isLive && broadcast.mediaState !== "connected";
+  const host = profile ?? { name: "You", accent: "lime" as const };
 
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-10 px-5 pb-20 sm:px-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -83,23 +92,32 @@ export function Studio() {
           />
           <TvFrame tone="grape">
             <BroadcastScreen
-              host={ME}
+              host={host}
               stream={preview}
               mirrored
               caption={isLive ? "you're live" : "preview"}
             />
-            <ReactionLayer reactions={reactions} />
-            {media.status !== "ready" && (
+            <ReactionLayer reactions={chat.reactions} />
+            {media.status !== "ready" ? (
               <Sticker tone="cream" className="absolute top-4 left-4 -rotate-3">
                 {media.status === "blocked"
                   ? "camera blocked: check permissions"
                   : "asking for camera…"}
               </Sticker>
+            ) : (
+              isConnectingVideo && (
+                <Sticker
+                  tone="cream"
+                  className="absolute top-4 left-4 -rotate-3"
+                >
+                  sending video…
+                </Sticker>
+              )
             )}
           </TvFrame>
           {isLive && (
             <ViewerCount
-              viewers={viewers}
+              viewers={broadcast.viewers}
               className="absolute top-2 -right-2 sm:-right-6"
             />
           )}
@@ -136,11 +154,31 @@ export function Studio() {
               }
             />
             <p className="max-w-[22ch] font-mono text-xs font-bold uppercase leading-snug text-ink/60">
-              {category} · {isLive ? "broadcasting" : "not live yet"}
+              {category} ·{" "}
+              {broadcast.status === "starting"
+                ? "going live…"
+                : isLive
+                  ? "broadcasting"
+                  : "not live yet"}
             </p>
           </div>
-          <GoLiveButton isLive={isLive} onClick={toggleLive} />
+          <GoLiveButton
+            isLive={isLive}
+            onClick={toggleLive}
+            disabled={
+              !profile || !media.stream || broadcast.status === "starting"
+            }
+          />
         </div>
+
+        {broadcast.problem && !isLive && (
+          <p role="alert" className="self-start">
+            <Sticker tone="tomato" className="-rotate-1 text-sm">
+              {PROBLEMS[broadcast.problem]}
+            </Sticker>
+          </p>
+        )}
+        {broadcast.stream && <ShareStreamLink streamId={broadcast.stream.id} />}
       </div>
 
       <aside className="flex flex-col gap-8">
@@ -149,9 +187,10 @@ export function Studio() {
           onTitleChange={setTitle}
           category={category}
           onCategoryChange={setCategory}
+          disabled={broadcast.status !== "idle"}
         />
         <StudioStats
-          viewers={viewers}
+          viewers={broadcast.viewers}
           elapsedSeconds={elapsedSeconds}
           messages={chat.messages.length}
         />
@@ -160,7 +199,7 @@ export function Studio() {
             variant="receipt"
             messages={chat.messages}
             onSend={chat.send}
-            meName={ME.name}
+            meName={host.name}
             disabled={!isLive}
             placeholder={isLive ? "Talk to chat…" : "Go live to chat"}
           />

@@ -3,13 +3,12 @@ import { Hero } from "@/features/home/components/Hero";
 import { LiveNowWall } from "@/features/home/components/LiveNowWall";
 import { LiveTicker } from "@/features/home/components/LiveTicker";
 import { StartCallTicket } from "@/features/home/components/StartCallTicket";
-import { BROADCASTS } from "@/lib/mock-data";
 
 export default function HomePage() {
   return (
     <>
       <Hero />
-      <LiveTicker broadcasts={BROADCASTS} />
+      <LiveTicker />
       {/* --notch matches the band so the ticket "bites" look cut out. */}
       <section
         id="start"
@@ -20,7 +19,7 @@ export default function HomePage() {
           <GoLiveTicket />
         </div>
       </section>
-      <LiveNowWall broadcasts={BROADCASTS} />
+      <LiveNowWall />
     </>
   );
 }

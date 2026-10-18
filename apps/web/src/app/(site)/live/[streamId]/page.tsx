@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Loader } from "@/components/ui/Loader";
 import { LiveViewer } from "@/features/stream/components/LiveViewer";
-import { getBroadcast } from "@/lib/mock-data";
 
 export const metadata: Metadata = { title: "Live" };
 
@@ -20,8 +18,6 @@ export default function LivePage({ params }: PageProps<"/live/[streamId]">) {
 
 async function LiveViewerForParams({ params }: { params: Params }) {
   const { streamId } = await params;
-  const broadcast = getBroadcast(streamId);
-  if (!broadcast) notFound();
-
-  return <LiveViewer broadcast={broadcast} />;
+  // Whether it's live is only known once the browser asks the server.
+  return <LiveViewer streamId={streamId} />;
 }

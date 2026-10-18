@@ -4,12 +4,21 @@ import { Volume2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 
+interface RemoteAudioProps {
+  streams: MediaStream[];
+  /** Text on the button shown when the browser blocks sound. */
+  unlockLabel?: string;
+}
+
 /**
- * Plays everyone's voice through hidden <audio> elements, one per person.
- * Kept apart from the video tiles so you still hear people whose camera is
- * off (their tile shows an avatar, with no <video> element).
+ * Plays other people's sound through hidden <audio> elements, one per
+ * stream. Kept apart from the video so you still hear someone whose camera
+ * is off (their tile shows an avatar, with no <video> element).
  */
-export function RemoteAudio({ streams }: { streams: MediaStream[] }) {
+export function RemoteAudio({
+  streams,
+  unlockLabel = "Tap to hear everyone",
+}: RemoteAudioProps) {
   const [isBlocked, setBlocked] = useState(false);
   const [unlockCount, setUnlockCount] = useState(0);
 
@@ -34,7 +43,7 @@ export function RemoteAudio({ streams }: { streams: MediaStream[] }) {
           }}
         >
           <Volume2 />
-          Tap to hear everyone
+          {unlockLabel}
         </Button>
       )}
     </>

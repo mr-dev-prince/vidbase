@@ -4,6 +4,7 @@ import { MAX_PARTICIPANTS, type ReactionEmoji } from "@vidbase/shared";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ReactionLayer } from "@/components/media/ReactionLayer";
+import { RemoteAudio } from "@/components/media/RemoteAudio";
 import { Notebook } from "@/components/ui/Notebook";
 import { ChatPanel } from "@/features/chat/components/ChatPanel";
 import { useElapsedSeconds } from "@/hooks/useElapsedSeconds";
@@ -23,7 +24,6 @@ import type { CallPanel } from "../types";
 import { CallTopBar } from "./CallTopBar";
 import { ControlDock } from "./ControlDock";
 import { PeopleList } from "./PeopleList";
-import { RemoteAudio } from "./RemoteAudio";
 import { VideoWall } from "./VideoWall";
 
 /** The in-call screen. Rendered only once the server has given you a seat. */

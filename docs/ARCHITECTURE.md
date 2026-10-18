@@ -1,8 +1,8 @@
 # vidbase architecture
 
-vidbase is a video-call app. Someone creates a room, shares the room code, and up to **5 people** join the same call. This doc explains how the pieces fit together.
+vidbase is a video-call and live-streaming app. Someone creates a room, shares the room code, and up to **5 people** join the same call. Or someone goes live and up to **100 people** watch. This doc explains how the pieces fit together.
 
-> **Status:** people in a room see and hear each other live over WebRTC (camera + mic only), see each other's mic/camera/hand state and who's talking, and can chat and throw emoji reactions. Every browser connects directly to every other browser (a "mesh").
+> **Status:** people in a room see and hear each other live over WebRTC (camera + mic only), see each other's mic/camera/hand state and who's talking, and can chat and throw emoji reactions. Every browser connects directly to every other browser (a "mesh"). Live streams are real too: the video goes through Cloudflare's SFU (section 9), and the home page lists who's live.
 
 ---
 
@@ -27,7 +27,7 @@ flowchart LR
 | --- | --- |
 | `apps/web` | The website: pages, UI, the call room. |
 | `apps/signaling` | A small server that tells browsers who is in which room and passes messages between them. |
-| `packages/shared` | Code both apps import: the list of socket events, their data shapes, the 5-person limit, room-code rules and the color palette. |
+| `packages/shared` | Code both apps import: the list of socket events, their data shapes, the 5-person and 100-viewer limits, room-code rules, stream categories and the color palette. |
 
 `packages/shared` is the **contract**. If an event or its data changes, it changes there, and TypeScript flags every place on both sides that needs updating.
 
@@ -52,6 +52,8 @@ flowchart LR
 ```
 
 The web app and the signaling server are deployed separately. The web app finds the server through the `NEXT_PUBLIC_SIGNALING_URL` environment variable. The STUN server only helps each browser discover its public network address (see section 7).
+
+Live streams work differently: the video goes through a media server on Cloudflare's network instead of directly between browsers. See section 9.
 
 ---
 
@@ -86,8 +88,8 @@ flowchart TD
 - **`ControlDock`** (mic, camera, hand, reactions, chat, people, leave) is a vertical bar on the right edge on tablets and desktops, and a row along the bottom on phones. The chat button gets a red dot when messages arrive while the chat is closed.
 - **`hooks/usePeerMesh.ts`** runs WebRTC while you're in the call: it creates the mesh, feeds it your camera, and connects it to the socket and the store (section 7).
 - **`hooks/useSpeakingPeers.ts`** measures how loud each person's audio is and reports who's talking, which lights up their tile (section 7.6).
-- **`RemoteAudio`** plays everyone's voice through hidden `<audio>` elements (section 7).
-- **`services/guestProfile.ts`** gives you a random name and color (like "Groovy Llama"), kept per browser tab. A second tab acts as a different person, which makes local testing easy.
+- **`components/media/RemoteAudio`** plays everyone's voice through hidden `<audio>` elements (section 7). Live streams use it too.
+- **`lib/guestProfile.ts`** gives you a random name and color (like "Groovy Llama"), kept per browser tab. A second tab acts as a different person, which makes local testing easy. Calls and streams both use it.
 
 ### Room status
 
@@ -250,7 +252,7 @@ Browsers block sound until you've interacted with the page. If playback is block
 
 Most devices sit behind a router (NAT) and only know their private address. A **STUN** server tells a browser its public address so the other side can reach it. We use Google's free public STUN servers (`webrtc/iceServers.ts`).
 
-On some networks (strict firewalls, "symmetric" NATs) no direct path exists at all. Then a **TURN** server is needed: it relays the video itself, which costs bandwidth, so there's no free public one. vidbase works without it on most home networks. To add one, set the `NEXT_PUBLIC_TURN_*` variables (section 9).
+On some networks (strict firewalls, "symmetric" NATs) no direct path exists at all. Then a **TURN** server is needed: it relays the video itself, which costs bandwidth, so there's no free public one. vidbase works without it on most home networks. To add one, set the `NEXT_PUBLIC_TURN_*` variables (section 10).
 
 ---
 
@@ -261,16 +263,27 @@ flowchart TD
   index["index.ts<br/>HTTP server + Socket.IO + /health"] --> roomH["handlers/roomHandlers.ts<br/>join · leave · update"]
   index --> sigH["handlers/signalHandlers.ts<br/>relay offer/answer/ICE"]
   index --> msgH["handlers/messageHandlers.ts<br/>relay chat + reactions"]
+  index --> strH["handlers/streamHandlers.ts<br/>go live · tune in · leave"]
   index --> rl["rateLimits.ts<br/>per-IP + per-socket limits"]
   roomH --> val["validation.ts<br/>checks every incoming message"]
   sigH --> val
   msgH --> val
+  strH --> val
   roomH --> reg["RoomRegistry.ts<br/>who is in which room (in memory)"]
   sigH --> reg
-  msgH --> reg
+  strH --> sreg["StreamRegistry.ts<br/>who's live, who's watching (in memory)"]
+  msgH --> sreg
+  strH --> sfu["sfu.ts<br/>Cloudflare Realtime API client"]
+  strH --> meter["UsageMeter.ts<br/>monthly streaming budget (saved to disk)"]
 ```
 
 - **`RoomRegistry`** keeps rooms in memory and enforces the 5-person limit. It knows nothing about sockets, so it's easy to follow.
+- **`StreamRegistry`** does the same for live streams: who's broadcasting, who's watching, the 100-viewer cap and each stream's shared chat/reaction limits.
+- **`UsageMeter`** estimates how much video Cloudflare has sent this month and stops streaming before it would cost money (section 9).
+- **`sfu.ts`** is the only code that talks to Cloudflare. It holds the app secret, which never reaches a browser.
+- **Chat and reactions** go to the socket's **channel**: the call room, or the stream it's broadcasting or watching. The server fills in the author from the name the socket joined with.
+- A socket is in **one call or one stream** at a time; asking to join a second is refused.
+- **HTTP:** besides Socket.IO, the server answers `GET /health` and `GET /streams` (the live list for the home page, readable from the web app's origin via CORS).
 - **`validation.ts`** treats every message from a browser as untrusted. Bad room codes, wrong types or oversized messages are rejected.
 - **`rateLimits.ts`** stops any one client from flooding the server or a room (see below).
 - Because rooms live in memory, run **one** server instance. Running several would need a shared store (e.g. the Socket.IO Redis adapter).
@@ -288,10 +301,14 @@ Every limit is a **token bucket**: you start with a few tokens (the burst), each
 | `reaction:send` | socket | 10 | 5 per s |
 | `peer:update` | socket | 10 | 5 per s |
 | `signal` | socket | 200 | 50 per s |
+| `stream:start`, `stream:watch` | IP (shares the `room:join` bucket) | 10 | 1 every 2 s |
+| Chat in one live stream | stream (everyone together) | 20 | 10 per s |
+| Reactions in one live stream | stream (everyone together) | 30 | 15 per s |
 
 - Connections and joins are counted **per IP**, because reconnecting gives you a new socket and would otherwise reset the count. Messages are counted **per socket**; that's enough since every socket has to join through the IP limit first.
 - Over the limit, messages are dropped silently. A refused connection or join makes the browser show "reconnecting" and try again after 5 seconds.
 - **Finding the real IP:** in production every connection comes from `cloudflared` on the same machine, so the server reads the `cf-connecting-ip` header that Cloudflare adds. It only trusts that header on connections from `localhost`, so nobody connecting directly can fake it.
+- A live stream can have 100 viewers, and each message goes to all of them. So on top of each person's own limit, the stream as a whole has a chat and reaction limit, and the viewer count is sent at most once a second.
 - The browser also keeps at most 30 floating emoji on screen.
 
 ```mermaid
@@ -319,12 +336,111 @@ flowchart LR
 | `chat:message` | server → browser | A chat message from someone else, with their name and color. |
 | `reaction:send` | browser → server | "I threw this emoji." |
 | `reaction` | server → browser | Someone else threw an emoji. |
+| `stream:start` | browser → server | "Put me on air" with title, category and a WebRTC offer. Replies with the SFU's answer, or why not. |
+| `stream:watch` | browser → server | "Let me watch this stream." Replies with the SFU's offer, or not-found/full/etc. |
+| `stream:answer` | browser → server | A viewer's answer to that offer. |
+| `stream:leave` | browser → server | Stop broadcasting, or stop watching. |
+| `stream:viewers` | server → browser | How many people are watching (at most once a second). |
+| `stream:ended` | server → browser | The broadcaster stopped or disconnected, or the server ended it (reason `over-budget`). |
 
 All of these are typed in `packages/shared/src/signaling.ts`.
 
 ---
 
-## 9. Configuration
+## 9. Live streams
+
+One person broadcasts and up to **100** people watch at a time. The video goes through **Cloudflare Realtime SFU**. An SFU ("selective forwarding unit") is a media server: it receives the broadcaster's camera **once** and sends a copy to each viewer. Our signaling server never touches the video. It keeps the Cloudflare secret, sets up the SFU sessions, and passes the WebRTC offers and answers between the browsers and Cloudflare.
+
+Why not the other options:
+
+- **Browser to browser (like calls):** the broadcaster would upload one copy per viewer, so a home connection tops out around 10 viewers.
+- **An SFU on our Pi:** WebRTC media needs UDP, but the Cloudflare Tunnel only carries HTTP and WebSockets. And a home upload of ~100 Mbps only feeds ~50–60 viewers at 720p.
+
+```mermaid
+flowchart LR
+  H["Broadcaster<br/>/studio"] <-- "Socket.IO: go live, SDP, chat" --> S["Signaling server<br/>(Pi)"]
+  V["Viewers<br/>/live/&lt;id&gt;"] <-- "Socket.IO: watch, SDP, chat" --> S
+  S -- "HTTPS API + secret" --> CF["Cloudflare<br/>Realtime SFU"]
+  H == "camera + mic (sent once)" ==> CF
+  CF == "a copy to each viewer" ==> V
+  Home["Home page"] -- "GET /streams every 10 s" --> S
+```
+
+### Going live
+
+```mermaid
+sequenceDiagram
+  participant B as Broadcaster
+  participant S as Signaling server
+  participant C as Cloudflare SFU
+  Note over B: makes a connection with send-only<br/>audio + video lanes and an offer
+  B->>S: stream:start { title, category, offer, which lane is which }
+  S->>C: POST sessions/new
+  C-->>S: sessionId
+  S->>C: POST sessions/{id}/tracks/new { offer, publish "audio" + "video" }
+  C-->>S: answer
+  S-->>B: ok + stream id + answer
+  B->>C: WebRTC connects, camera + mic flow
+```
+
+### Tuning in
+
+```mermaid
+sequenceDiagram
+  participant V as Viewer
+  participant S as Signaling server
+  participant C as Cloudflare SFU
+  V->>S: stream:watch { streamId }
+  S->>S: take a seat (max 100)
+  S->>C: POST sessions/new (the viewer's own session)
+  S->>C: POST tracks/new { pull "audio" + "video" from the broadcaster's session }
+  C-->>S: offer
+  S-->>V: ok + stream info + offer
+  V->>S: stream:answer
+  S->>C: PUT renegotiate { answer }
+  C->>V: video + audio
+```
+
+### In the web app
+
+- **`features/stream/services/broadcastSession.ts`** goes live: it builds the send-only connection, sends `stream:start`, applies Cloudflare's answer, and ends the stream when you stop or the connection drops.
+- **`features/stream/services/watchSession.ts`** tunes in, answers Cloudflare's offer, and tunes in again by itself after a reconnect or a failed connection.
+- **`features/stream/services/streamSocket.ts`** has the socket helpers both share (connecting, chat, reactions). As with calls, only these services talk to the socket.
+- **`features/stream/webrtc/sfuConnection.ts`** creates connections to Cloudflare. They use Cloudflare's STUN server, send audio and video over one network path (`bundlePolicy: "max-bundle"`), and wait for the browser to finish finding its addresses before sending SDP. Cloudflare's API takes one complete SDP per request.
+- **Hooks:** `useBroadcast` (studio), `useWatchStream` (viewer page) and `useStreamChat` (chat + reactions for both).
+- **`Studio`** (`/studio`) shows your preview and the Go Live button. Once you're live it shows the viewer count and a link to share. **`LiveViewer`** (`/live/<id>`) shows the stream, the chat and reactions, or a "stream ended / packed / off air" screen.
+- **Home page:** `useLiveStreams` polls `GET /streams` every 10 seconds. The ticker and the "live right now" wall share that one poll.
+
+### Good to know
+
+- **Cap:** 100 viewers per stream at a time (`MAX_VIEWERS`). A seat is taken *before* the slow Cloudflare calls, so the cap holds even when many people tune in at once.
+- **Chat and reactions** use the same events as calls, sent to everyone in the stream, with the stream-wide limits from section 8.
+- **If the broadcaster's connection drops**, the stream ends and viewers see "stream ended". Viewers who drop reconnect and tune in again by themselves.
+- **No credentials, no streaming:** without `CLOUDFLARE_REALTIME_APP_ID`/`_SECRET` on the server, "Go live" says streaming isn't set up.
+- **Cost:** Cloudflare gives 1,000 GB of outgoing video a month for free, then $0.05/GB. See the monthly budget below.
+
+### Staying inside the free allowance
+
+Cloudflare bills the video it sends to viewers. The signaling server keeps a running estimate and stops streaming **before** the free 1,000 GB is used up:
+
+- The broadcaster's video is capped at **1.2 Mbps** (`STREAM_VIDEO_MAX_BITRATE`, still good 720p). With audio and network overhead, one viewer gets at most **~0.65 GB per hour**.
+- Every 10 seconds, `UsageMeter` adds *viewers × 10 s × that rate*. It's an upper bound: real usage is usually lower.
+- The monthly budget is **900 GB** by default (`STREAM_BUDGET_GB`), about **1,375 viewer-hours**. That leaves 100 GB of room under the free allowance in case the estimate is off.
+- When the budget is reached, going live and tuning in are refused, and live streams end with an "out of airtime" message. It resets on the 1st of each month (UTC).
+- The running total is saved to `apps/signaling/data/usage.json` once a minute and on shutdown, so restarts don't reset it. If that file is ever unreadable, streaming pauses rather than risking a bill.
+- `GET /health` shows this month's usage: `streamingUsage: { month, usedGb, budgetGb, viewerHoursLeft }`.
+
+```mermaid
+flowchart LR
+  tick["every 10 s"] --> add["used += viewers × 10 s × 0.65 GB/h"]
+  add --> check{"used ≥ budget?"}
+  check -- no --> tick
+  check -- yes --> stop["end all streams<br/>refuse new ones<br/>until the 1st"]
+```
+
+---
+
+## 10. Configuration
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
@@ -332,8 +448,11 @@ All of these are typed in `packages/shared/src/signaling.ts`.
 | `NEXT_PUBLIC_TURN_URL`, `NEXT_PUBLIC_TURN_USERNAME`, `NEXT_PUBLIC_TURN_CREDENTIAL` | `apps/web` | Optional TURN relay for networks where a direct connection is impossible. Empty means STUN only. |
 | `PORT` | `apps/signaling` | Port to listen on. Default `4000`; most hosts set it for you. |
 | `CORS_ORIGIN` | `apps/signaling` | Web app address(es) allowed to connect, comma-separated. Default `http://localhost:3000`. |
+| `STREAM_BUDGET_GB` | `apps/signaling` | Monthly cap on streaming video, in GB (section 9). Default `900`, under Cloudflare's free 1,000. |
+| `USAGE_FILE` | `apps/signaling` | Where the month's streaming usage is saved. Default `apps/signaling/data/usage.json`. |
+| `CLOUDFLARE_REALTIME_APP_ID`, `CLOUDFLARE_REALTIME_APP_SECRET` | `apps/signaling` | The Cloudflare Realtime SFU app used for live streams (Cloudflare dashboard → Realtime → SFU). The secret stays on the server. Empty means live streaming is off. |
 
-## 10. Deploying
+## 11. Deploying
 
 ```mermaid
 flowchart LR
@@ -343,6 +462,7 @@ flowchart LR
   vercel -. "NEXT_PUBLIC_SIGNALING_URL" .-> cf["Cloudflare<br/>vidbase-signal.devprince.space"]
   cf -- "Cloudflare Tunnel" --> pi
   pi -. "CORS_ORIGIN" .-> vercel
+  pi -- "HTTPS API (live streams)" --> sfu["Cloudflare Realtime SFU"]
 ```
 
 The signaling server runs on a Raspberry Pi at home. The Pi has no open router ports: a small program called `cloudflared` keeps an outgoing connection to Cloudflare open. Browsers connect to `https://vidbase-signal.devprince.space`; Cloudflare handles HTTPS there and passes the traffic (including WebSockets) down that connection to `localhost:4000` on the Pi.
@@ -359,7 +479,7 @@ sequenceDiagram
   T->>S: http://localhost:4000
 ```
 
-1. **Signaling server (Pi):** clone the repo, `bun install --production --filter '@vidbase/signaling'`, set `CORS_ORIGIN` in `apps/signaling/.env` to the web app's URL, and run `bun src/index.ts` from `apps/signaling` as a systemd service so it restarts on crash or reboot.
+1. **Signaling server (Pi):** clone the repo, `bun install --production --filter '@vidbase/signaling'`, set `CORS_ORIGIN` in `apps/signaling/.env` to the web app's URL (plus `CLOUDFLARE_REALTIME_APP_ID` and `CLOUDFLARE_REALTIME_APP_SECRET` for live streams), and run `bun src/index.ts` from `apps/signaling` as a systemd service so it restarts on crash or reboot.
 2. **Public address:** a Cloudflare Tunnel (also a systemd service) maps `vidbase-signal.devprince.space` to `http://localhost:4000`.
 3. **Web app:** deploy `apps/web` to Vercel with root directory `apps/web`. Set `NEXT_PUBLIC_SIGNALING_URL=https://vidbase-signal.devprince.space`, then redeploy (it's baked in at build time).
 4. **Web app domain:** `vidbase.devprince.space` is added in Vercel (Settings → Domains) and points to Vercel with a CNAME record in Cloudflare set to "DNS only" (grey cloud), so Vercel issues the HTTPS certificate itself. `CORS_ORIGIN` on the Pi lists this domain (plus the `*.vercel.app` URL).
@@ -368,9 +488,11 @@ The signaling server is not tied to the Pi: any host that keeps a Bun process ru
 
 ---
 
-## 11. Not built yet
+## 12. Not built yet
 
 - **TURN by default.** Calls between some strict networks can fail until a TURN server is configured.
 - **Chat history.** Chat isn't stored, so people who join late don't see earlier messages.
 - **Accounts.** Names are random per tab. There is no database on purpose: everything in a call is short-lived (see decision #15).
-- **Live streaming pages** (`/studio`, `/live/...`) still use placeholder data.
+- **Resuming a stream.** If the broadcaster's connection drops, the stream ends; going live again gives a new link.
+- **Lower-quality versions for slow viewers ("simulcast").** Every viewer gets the same video quality.
+- **Following streamers.** There are no accounts, so there's nothing to follow.

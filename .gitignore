@@ -45,3 +45,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
+# signaling server state (monthly streaming usage)
+apps/signaling/data/

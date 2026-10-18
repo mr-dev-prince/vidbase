@@ -46,10 +46,6 @@ export class RoomRegistry {
     return updated;
   }
 
-  get(roomId: string, peerId: string) {
-    return this.rooms.get(roomId)?.get(peerId);
-  }
-
   isInRoom(roomId: string, peerId: string) {
     return this.rooms.get(roomId)?.has(peerId) ?? false;
   }

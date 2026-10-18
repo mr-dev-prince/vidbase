@@ -20,16 +20,6 @@ export interface Participant extends Person {
   isHandRaised?: boolean;
 }
 
-export interface Broadcast {
-  id: string;
-  title: string;
-  host: Person;
-  category: string;
-  viewers: number;
-  tags: string[];
-  accent: Accent;
-}
-
 export type ChatMessageKind = "message" | "system";
 
 export interface ChatMessage {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { getGuestProfile } from "../services/guestProfile";
+import { getGuestProfile } from "@/lib/guestProfile";
 import { joinRoom } from "../services/roomSession";
 
 /** Joins `roomId` while the component is mounted, and leaves on unmount. */

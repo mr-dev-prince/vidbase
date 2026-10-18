@@ -41,8 +41,10 @@ Run one app only: `bunx turbo run dev --filter=@vidbase/web` (or `@vidbase/signa
 | `NEXT_PUBLIC_TURN_URL`, `_USERNAME`, `_CREDENTIAL` | web | empty (optional TURN relay; STUN-only without it) |
 | `PORT` | signaling | `4000` |
 | `CORS_ORIGIN` | signaling | `http://localhost:3000` (comma-separated list) |
+| `STREAM_BUDGET_GB` | signaling | `900` (monthly streaming cap; stays under Cloudflare's free 1,000 GB) |
+| `CLOUDFLARE_REALTIME_APP_ID`, `_SECRET` | signaling | empty (live streaming off; set them from Cloudflare dashboard → Realtime → SFU) |
 
 ## Deploying
 
-1. **Signaling server:** runs on a Raspberry Pi as a systemd service (`bun src/index.ts` in `apps/signaling`), published at `https://vidbase-signal.devprince.space` through a Cloudflare Tunnel. Set `CORS_ORIGIN` to your web app's URL. Any host that keeps a Bun process running works too.
+1. **Signaling server:** runs on a Raspberry Pi as a systemd service (`bun src/index.ts` in `apps/signaling`), published at `https://vidbase-signal.devprince.space` through a Cloudflare Tunnel. Set `CORS_ORIGIN` to your web app's URL, and `CLOUDFLARE_REALTIME_APP_ID`/`_SECRET` for live streams. Any host that keeps a Bun process running works too.
 2. **Web app:** deploy to Vercel with root directory `apps/web`. Set `NEXT_PUBLIC_SIGNALING_URL=https://vidbase-signal.devprince.space`, then redeploy. Served at `https://vidbase.devprince.space` (CNAME in Cloudflare, DNS only).

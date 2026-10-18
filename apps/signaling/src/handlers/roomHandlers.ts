@@ -19,6 +19,8 @@ export function registerRoomHandlers(
     socket.leave(roomId);
     socket.to(roomId).emit("peer:left", socket.id);
     socket.data.roomId = undefined;
+    socket.data.channel = undefined;
+    socket.data.profile = undefined;
     log.info(`${socket.id} left ${roomId}`);
   };
 
@@ -31,7 +33,8 @@ export function registerRoomHandlers(
     }
 
     const request = parseJoinRequest(rawRequest);
-    if (!request) {
+    // One activity per socket: no joining a call while in a live stream.
+    if (!request || socket.data.stream) {
       ack({ ok: false, reason: "invalid-request" });
       return;
     }
@@ -55,6 +58,8 @@ export function registerRoomHandlers(
     }
 
     socket.data.roomId = request.roomId;
+    socket.data.channel = request.roomId;
+    socket.data.profile = request.profile;
     socket.join(request.roomId);
     socket.to(request.roomId).emit("peer:joined", self);
     ack({ ok: true, self, peers: outcome.peers });

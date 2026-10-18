@@ -11,7 +11,7 @@ export type SignalingSocket = Socket<
 
 // The signaling server is deployed separately (apps/signaling).
 // Inlined at build time by Next.js because of the NEXT_PUBLIC_ prefix.
-const SIGNALING_URL =
+export const SIGNALING_URL =
   process.env.NEXT_PUBLIC_SIGNALING_URL ?? "http://localhost:4000";
 
 let socket: SignalingSocket | null = null;

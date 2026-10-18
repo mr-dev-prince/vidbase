@@ -25,6 +25,12 @@ export const LIMITS = {
   mediaUpdate: { burst: 10, perSecond: 5 },
   /** WebRTC offers/answers/ICE candidates; joining a full room sends dozens. */
   signal: { burst: 200, perSecond: 50 },
+  /**
+   * Shared by everyone in one live stream: with up to MAX_VIEWERS viewers, each
+   * message is sent to all of them, so the stream as a whole is capped too.
+   */
+  streamChat: { burst: 20, perSecond: 10 },
+  streamReaction: { burst: 30, perSecond: 15 },
 } satisfies Record<string, BucketSize | number>;
 
 /**

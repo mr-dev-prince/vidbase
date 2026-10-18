@@ -1,24 +1,20 @@
 "use client";
 
+import {
+  STREAM_CATEGORIES,
+  STREAM_TITLE_MAX_LENGTH,
+  type StreamCategory,
+} from "@vidbase/shared";
 import { useId } from "react";
 import { cn } from "@/lib/utils";
-
-export const STREAM_CATEGORIES = [
-  "Just chatting",
-  "Music",
-  "Gaming",
-  "Coding",
-  "Crafts",
-  "Food",
-] as const;
-
-export type StreamCategory = (typeof STREAM_CATEGORIES)[number];
 
 interface StreamSetupProps {
   title: string;
   onTitleChange: (title: string) => void;
   category: StreamCategory;
   onCategoryChange: (category: StreamCategory) => void;
+  /** Locked while live: viewers already see the title. */
+  disabled?: boolean;
 }
 
 export function StreamSetup({
@@ -26,11 +22,15 @@ export function StreamSetup({
   onTitleChange,
   category,
   onCategoryChange,
+  disabled,
 }: StreamSetupProps) {
   const titleId = useId();
 
   return (
-    <section className="rotate-1 rounded-3xl border-[3px] border-ink bg-sun p-5 shadow-hard-lg">
+    <fieldset
+      disabled={disabled}
+      className="rotate-1 rounded-3xl border-[3px] border-ink bg-sun p-5 shadow-hard-lg disabled:opacity-60"
+    >
       <h2 className="font-display text-2xl font-extrabold uppercase tracking-tight">
         Stream setup
       </h2>
@@ -46,7 +46,7 @@ export function StreamSetup({
         id={titleId}
         value={title}
         onChange={(event) => onTitleChange(event.target.value)}
-        maxLength={80}
+        maxLength={STREAM_TITLE_MAX_LENGTH}
         className="mt-1.5 w-full -rotate-1 rounded-sm bg-ink px-3 py-2 font-mono text-sm font-bold uppercase tracking-wider text-paper shadow-hard-sm placeholder:text-paper/40 focus:outline-none focus-visible:ring-4 focus-visible:ring-sky"
         placeholder="Name your stream"
       />
@@ -74,6 +74,6 @@ export function StreamSetup({
           ))}
         </div>
       </fieldset>
-    </section>
+    </fieldset>
   );
 }

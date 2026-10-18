@@ -6,11 +6,16 @@ import {
   DISPLAY_NAME_MAX_LENGTH,
   isAccent,
   isReactionEmoji,
+  isStreamCategory,
   isValidRoomId,
   type JoinRoomRequest,
   type PeerMediaState,
+  type PeerProfile,
   type ReactionEmoji,
+  type SessionDescription,
   type SignalPayload,
+  STREAM_TITLE_MAX_LENGTH,
+  type StartStreamRequest,
 } from "@vidbase/shared";
 
 const MEDIA_KEYS = ["isMuted", "isCameraOff", "isHandRaised"] as const;
@@ -47,20 +52,83 @@ function parseMediaState(value: unknown): PeerMediaState | null {
   return patch as PeerMediaState;
 }
 
-export function parseJoinRequest(value: unknown): JoinRoomRequest | null {
-  if (!isRecord(value) || !isRecord(value.profile)) return null;
-
-  const { roomId, profile } = value;
+function parseProfile(value: unknown): PeerProfile | null {
+  if (!isRecord(value)) return null;
   const name =
-    typeof profile.name === "string"
-      ? profile.name.trim().slice(0, DISPLAY_NAME_MAX_LENGTH)
+    typeof value.name === "string"
+      ? value.name.trim().slice(0, DISPLAY_NAME_MAX_LENGTH)
       : "";
+  return name && isAccent(value.accent) ? { name, accent: value.accent } : null;
+}
+
+export function parseJoinRequest(value: unknown): JoinRoomRequest | null {
+  if (!isRecord(value)) return null;
+
+  const { roomId } = value;
+  const profile = parseProfile(value.profile);
   const media = parseMediaState(value.media);
 
-  if (!isValidRoomId(roomId) || !name || !isAccent(profile.accent) || !media) {
+  if (!isValidRoomId(roomId) || !profile || !media) return null;
+  return { roomId, profile, media };
+}
+
+function parseDescription(
+  value: unknown,
+  type: SessionDescription["type"],
+): SessionDescription | null {
+  if (!isRecord(value) || value.type !== type) return null;
+  const { sdp } = value;
+  return typeof sdp === "string" && sdp.length <= MAX_SDP_LENGTH
+    ? { type, sdp }
+    : null;
+}
+
+/** A transceiver `mid`: short, and only letters or digits. */
+const isMid = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-zA-Z0-9]{1,8}$/.test(value);
+
+export function parseStartStream(value: unknown): StartStreamRequest | null {
+  if (!isRecord(value) || !isRecord(value.details) || !isRecord(value.mids)) {
     return null;
   }
-  return { roomId, profile: { name, accent: profile.accent }, media };
+  const { details, mids } = value;
+  const title =
+    typeof details.title === "string"
+      ? details.title.trim().slice(0, STREAM_TITLE_MAX_LENGTH)
+      : "";
+  const profile = parseProfile(value.profile);
+  const offer = parseDescription(value.offer, "offer");
+
+  if (
+    !title ||
+    !isStreamCategory(details.category) ||
+    !profile ||
+    !offer ||
+    !isMid(mids.audio) ||
+    !isMid(mids.video) ||
+    mids.audio === mids.video
+  ) {
+    return null;
+  }
+  return {
+    details: { title, category: details.category },
+    profile,
+    offer,
+    mids: { audio: mids.audio, video: mids.video },
+  };
+}
+
+export function parseWatchStream(
+  value: unknown,
+): { streamId: string; profile: PeerProfile } | null {
+  if (!isRecord(value)) return null;
+  const { streamId } = value;
+  const profile = parseProfile(value.profile);
+  return isValidRoomId(streamId) && profile ? { streamId, profile } : null;
+}
+
+export function parseAnswer(value: unknown) {
+  return parseDescription(value, "answer");
 }
 
 export function parseSignalMessage(
