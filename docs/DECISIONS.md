@@ -52,3 +52,11 @@
     - Why: the column-on-the-right came from a misread; a grid sized by headcount fills the screen in small calls, and a side dock stops covering the tiles. The grid's max width is tied to the viewport height (`100dvh`) so every tile fits on screen without scrolling.
 26. **The room-code button in the call top bar copies just the code (e.g. `cosmic-noodle-55`), not the page URL**
     - Why: the button shows the code, so it should copy what it shows; the code is what people type into "join with code" on the home page.
+27. **Host the signaling server on a home Raspberry Pi 5, run by systemd, instead of Railway/Render/Fly**
+    - Why: the server is light (signaling only, no media), the Pi is already running other services, and it costs nothing extra; systemd restarts it on crash or reboot.
+28. **Publish it at `vidbase-signal.devprince.space` through a Cloudflare Tunnel (not Tailscale Funnel or router port-forwarding)**
+    - Why: Funnel only serves `*.ts.net` names; a tunnel needs no open ports or public IP, gives HTTPS on our own domain, and passes WebSockets through.
+29. **Serve the web app at `vidbase.devprince.space`: CNAME in Cloudflare to Vercel with proxy off ("DNS only")**
+    - Why: Vercel needs to issue the HTTPS certificate and runs its own CDN; putting Cloudflare's proxy in front can block the certificate and adds a second cache.
+27. **Add a separate "copy link" button to the call top bar that copies `<origin>/call/<roomId>`; the code chip keeps copying just the code (#26)**
+    - Why: opening `/call/<roomId>` already joins the room, so a link lets friends hop in with one click; the link is built from `window.location.origin` (no site-URL env var needed), and dropping the page's query/hash keeps it clean.

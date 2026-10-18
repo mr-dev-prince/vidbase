@@ -82,6 +82,7 @@ flowchart TD
 - **`CallRoom`** shows a loader, the call, the "room full" screen or a connection problem, depending on the store's `status`.
 - **`CallSession`** is the call UI. It asks for your camera **only after** the server has given you a seat, and it reports your mic/camera/hand changes through `shareMediaState()`.
 - **`VideoWall`** shows only the people who are in the room, in the order they joined. The grid changes with headcount: 1 person gets one big tile with a "waiting for others to join…" note under it, 2 sit side by side, 3–4 make two rows of two, and 5 make a row of three over a row of two. Your screen share, when on, sits above the grid.
+- **`CallTopBar`** shows the room code and a **copy link** button. The code chip copies just the code (for typing into "join with code" on the home page). The link button copies `<site>/call/<code>`; opening that link drops a friend straight into the call.
 - **`ControlDock`** (mic, camera, share, hand, reactions, chat, people, leave) is a vertical bar on the right edge on tablets and desktops, and a row along the bottom on phones.
 - **`hooks/usePeerMesh.ts`** runs WebRTC while you're in the call: it creates the mesh, feeds it your camera, and connects it to the socket and the store (section 7).
 - **`RemoteAudio`** plays everyone's voice through hidden `<audio>` elements (section 7).
@@ -270,14 +271,33 @@ All of these are typed in `packages/shared/src/signaling.ts`.
 ```mermaid
 flowchart LR
   dev["Developer"] -- "git push" --> repo["Git repo"]
-  repo -- "root dir: apps/web" --> vercel["Vercel<br/>web app"]
-  repo -- "root dir: apps/signaling" --> host["Railway / Render / Fly…<br/>signaling server (Bun)"]
-  vercel -. "NEXT_PUBLIC_SIGNALING_URL" .-> host
-  host -. "CORS_ORIGIN" .-> vercel
+  repo -- "root dir: apps/web" --> vercel["Vercel<br/>web app<br/>vidbase.devprince.space"]
+  repo -- "git pull" --> pi["Raspberry Pi 5 (home)<br/>signaling server (Bun, systemd)<br/>localhost:4000"]
+  vercel -. "NEXT_PUBLIC_SIGNALING_URL" .-> cf["Cloudflare<br/>vidbase-signal.devprince.space"]
+  cf -- "Cloudflare Tunnel" --> pi
+  pi -. "CORS_ORIGIN" .-> vercel
 ```
 
-1. Deploy `apps/signaling` to a host that keeps a process running and supports Bun. Start command: `bun run start`. Set `CORS_ORIGIN` to the web app's URL.
-2. Deploy `apps/web` to Vercel with root directory `apps/web`. Set `NEXT_PUBLIC_SIGNALING_URL` to the signaling server's public URL.
+The signaling server runs on a Raspberry Pi at home. The Pi has no open router ports: a small program called `cloudflared` keeps an outgoing connection to Cloudflare open. Browsers connect to `https://vidbase-signal.devprince.space`; Cloudflare handles HTTPS there and passes the traffic (including WebSockets) down that connection to `localhost:4000` on the Pi.
+
+```mermaid
+sequenceDiagram
+  participant B as Browser
+  participant C as Cloudflare
+  participant T as cloudflared (on Pi)
+  participant S as Signaling server :4000
+  T->>C: open tunnel (outgoing, at startup)
+  B->>C: wss://vidbase-signal.devprince.space
+  C->>T: forward through tunnel
+  T->>S: http://localhost:4000
+```
+
+1. **Signaling server (Pi):** clone the repo, `bun install --production --filter '@vidbase/signaling'`, set `CORS_ORIGIN` in `apps/signaling/.env` to the web app's URL, and run `bun src/index.ts` from `apps/signaling` as a systemd service so it restarts on crash or reboot.
+2. **Public address:** a Cloudflare Tunnel (also a systemd service) maps `vidbase-signal.devprince.space` to `http://localhost:4000`.
+3. **Web app:** deploy `apps/web` to Vercel with root directory `apps/web`. Set `NEXT_PUBLIC_SIGNALING_URL=https://vidbase-signal.devprince.space`, then redeploy (it's baked in at build time).
+4. **Web app domain:** `vidbase.devprince.space` is added in Vercel (Settings → Domains) and points to Vercel with a CNAME record in Cloudflare set to "DNS only" (grey cloud), so Vercel issues the HTTPS certificate itself. `CORS_ORIGIN` on the Pi lists this domain (plus the `*.vercel.app` URL).
+
+The signaling server is not tied to the Pi: any host that keeps a Bun process running works the same way.
 
 ---
 

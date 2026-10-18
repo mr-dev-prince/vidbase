@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Users } from "lucide-react";
+import { Check, Copy, Link, Users } from "lucide-react";
 import { useState } from "react";
 import { Logo } from "@/components/layout/Logo";
 import { Sticker } from "@/components/ui/Sticker";
@@ -22,13 +22,16 @@ export function CallTopBar({
   isReconnecting,
 }: CallTopBarProps) {
   const isFull = peopleCount >= capacity;
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"code" | "link" | null>(null);
 
-  const copyRoomCode = async () => {
+  /** Copies the bare code, or a link that drops friends straight into the call. */
+  const copy = async (what: "code" | "link") => {
+    const text =
+      what === "code" ? roomId : `${window.location.origin}/call/${roomId}`;
     try {
-      await navigator.clipboard.writeText(roomId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      await navigator.clipboard.writeText(text);
+      setCopied(what);
+      setTimeout(() => setCopied(null), 1800);
     } catch {
       // Clipboard access denied; the code is still visible to copy by hand.
     }
@@ -40,16 +43,31 @@ export function CallTopBar({
         <Logo className="text-2xl" />
         <button
           type="button"
-          onClick={copyRoomCode}
+          onClick={() => copy("code")}
           aria-label={`Copy room code ${roomId}`}
           className="inline-flex min-w-0 -rotate-1 items-center gap-2 rounded-lg border-2 border-ink bg-sun px-3 py-1 font-mono text-sm font-bold shadow-hard-sm transition hover:rotate-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky"
         >
           <span className="truncate">#{roomId}</span>
-          {copied ? (
+          {copied === "code" ? (
             <Check aria-hidden className="size-4 shrink-0" />
           ) : (
             <Copy aria-hidden className="size-4 shrink-0" />
           )}
+        </button>
+        <button
+          type="button"
+          onClick={() => copy("link")}
+          aria-label="Copy invite link"
+          className="inline-flex shrink-0 rotate-1 items-center gap-2 rounded-lg border-2 border-ink bg-sky px-3 py-1 font-mono text-sm font-bold shadow-hard-sm transition hover:rotate-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky"
+        >
+          {copied === "link" ? (
+            <Check aria-hidden className="size-4" />
+          ) : (
+            <Link aria-hidden className="size-4" />
+          )}
+          <span className="hidden sm:inline">
+            {copied === "link" ? "copied!" : "copy link"}
+          </span>
         </button>
       </div>
       <div className="flex items-center gap-2">

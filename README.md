@@ -44,5 +44,5 @@ Run one app only: `bunx turbo run dev --filter=@vidbase/web` (or `@vidbase/signa
 
 ## Deploying
 
-1. **Signaling server:** deploy `apps/signaling` to a host that supports Bun (Railway, Render, Fly…), start command `bun run start`. Set `CORS_ORIGIN` to your web app's URL.
-2. **Web app:** deploy to Vercel with root directory `apps/web`. Set `NEXT_PUBLIC_SIGNALING_URL` to the signaling server's public URL.
+1. **Signaling server:** runs on a Raspberry Pi as a systemd service (`bun src/index.ts` in `apps/signaling`), published at `https://vidbase-signal.devprince.space` through a Cloudflare Tunnel. Set `CORS_ORIGIN` to your web app's URL. Any host that keeps a Bun process running works too.
+2. **Web app:** deploy to Vercel with root directory `apps/web`. Set `NEXT_PUBLIC_SIGNALING_URL=https://vidbase-signal.devprince.space`, then redeploy. Served at `https://vidbase.devprince.space` (CNAME in Cloudflare, DNS only).
