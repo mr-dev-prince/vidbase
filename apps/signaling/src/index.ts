@@ -5,13 +5,17 @@ import { createServer } from "node:http";
 import { MAX_PARTICIPANTS } from "@vidbase/shared";
 import { Server } from "socket.io";
 import { config } from "./config";
+import { registerMessageHandlers } from "./handlers/messageHandlers";
 import { registerRoomHandlers } from "./handlers/roomHandlers";
 import { registerSignalHandlers } from "./handlers/signalHandlers";
 import { log } from "./logger";
 import { RoomRegistry } from "./RoomRegistry";
+import { clientIp, createSocketLimits, IpLimiter } from "./rateLimits";
 import type { SignalingServer } from "./types";
 
 const rooms = new RoomRegistry(MAX_PARTICIPANTS);
+const ipLimiter = new IpLimiter();
+const sweepTimer = setInterval(() => ipLimiter.sweep(), 60_000);
 
 // Plain HTTP only serves a health check; Socket.IO handles its own path.
 const httpServer = createServer((request, response) => {
@@ -29,9 +33,24 @@ const io: SignalingServer = new Server(httpServer, {
   maxHttpBufferSize: 100_000,
 });
 
+// Turn away IPs with too many open or recent connections.
+io.use((socket, next) => {
+  const ip = clientIp(socket);
+  if (!ipLimiter.connect(ip)) {
+    log.info(`refused a connection from ${ip}: too many connections`);
+    next(new Error("too-many-connections"));
+    return;
+  }
+  socket.data.ip = ip;
+  next();
+});
+
 io.on("connection", (socket) => {
-  registerRoomHandlers(socket, rooms);
-  registerSignalHandlers(socket, rooms);
+  const limits = createSocketLimits(ipLimiter, socket.data.ip);
+  socket.on("disconnect", () => ipLimiter.disconnect(socket.data.ip));
+  registerRoomHandlers(socket, rooms, limits);
+  registerSignalHandlers(socket, rooms, limits);
+  registerMessageHandlers(socket, rooms, limits);
 });
 
 httpServer.listen(config.port, () => {
@@ -42,6 +61,7 @@ httpServer.listen(config.port, () => {
 
 function shutdown() {
   log.info("shutting down");
+  clearInterval(sweepTimer);
   io.close(() => process.exit(0));
 }
 

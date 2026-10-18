@@ -3,7 +3,7 @@
 import { Smile } from "lucide-react";
 import { useState } from "react";
 import { IconButton } from "@/components/ui/IconButton";
-import { REACTION_EMOJIS } from "@/lib/reactions";
+import { REACTION_EMOJIS, type ReactionEmoji } from "@/lib/reactions";
 
 /**
  * Toggles a row of emoji. It stays open so people can spam reactions.
@@ -13,7 +13,7 @@ import { REACTION_EMOJIS } from "@/lib/reactions";
 export function ReactionPicker({
   onReact,
 }: {
-  onReact: (emoji: string) => void;
+  onReact: (emoji: ReactionEmoji) => void;
 }) {
   const [isOpen, setOpen] = useState(false);
 

@@ -1,24 +1,24 @@
 "use client";
 
-import type { PeerInfo } from "@vidbase/shared";
 import { MAX_PARTICIPANTS } from "@vidbase/shared";
-import { DoorOpen, Zap } from "lucide-react";
+import { DoorOpen, UserRound, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/ui/Avatar";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { Starburst } from "@/components/ui/Starburst";
 import { createRoomCode } from "@/lib/room";
 import { tilt } from "@/lib/theme";
+import { cn } from "@/lib/utils";
+
+const SEATS = Array.from({ length: MAX_PARTICIPANTS }, (_, index) => index);
 
 interface RoomFullProps {
   roomId: string;
-  occupants: PeerInfo[];
   /** Asks the server again, in case someone left. */
   onKnockAgain: () => void;
 }
 
 /** Shown instead of the call when every seat is taken. */
-export function RoomFull({ roomId, occupants, onKnockAgain }: RoomFullProps) {
+export function RoomFull({ roomId, onKnockAgain }: RoomFullProps) {
   const router = useRouter();
 
   return (
@@ -29,21 +29,24 @@ export function RoomFull({ roomId, occupants, onKnockAgain }: RoomFullProps) {
           className="absolute -top-12 -right-6 size-28 sm:-right-10"
         >
           <span className="font-display text-2xl font-extrabold tabular-nums">
-            {occupants.length}/{MAX_PARTICIPANTS}
+            {MAX_PARTICIPANTS}/{MAX_PARTICIPANTS}
           </span>
         </Starburst>
 
-        <ul
-          className="flex justify-center -space-x-3"
-          aria-label="In this room"
-        >
-          {occupants.map((person, index) => (
-            <li key={person.id} className={tilt(index)}>
-              <Avatar person={person} size="md" className="shadow-hard-sm" />
-              <span className="sr-only">{person.name}</span>
-            </li>
+        {/* Faceless on purpose: the server doesn't say who's inside. */}
+        <div aria-hidden className="flex justify-center -space-x-3">
+          {SEATS.map((seat) => (
+            <span
+              key={seat}
+              className={cn(
+                "grid size-14 place-items-center rounded-blob border-2 border-ink bg-cream shadow-hard-sm",
+                tilt(seat),
+              )}
+            >
+              <UserRound className="size-6" />
+            </span>
           ))}
-        </ul>
+        </div>
 
         <h1 className="mt-6 font-display text-5xl font-extrabold uppercase leading-[0.9] tracking-tighter">
           Room&apos;s
@@ -52,7 +55,7 @@ export function RoomFull({ roomId, occupants, onKnockAgain }: RoomFullProps) {
         </h1>
         <p className="mx-auto mt-4 max-w-xs font-mono text-sm">
           <span className="font-bold">#{roomId}</span> already has{" "}
-          {occupants.length} people, the most a room can hold.
+          {MAX_PARTICIPANTS} people, the most a room can hold.
         </p>
 
         <div className="mt-8 flex flex-wrap justify-center gap-3">

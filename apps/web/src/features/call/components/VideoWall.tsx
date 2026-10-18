@@ -2,7 +2,6 @@ import { Sticker } from "@/components/ui/Sticker";
 import type { MediaStatus } from "@/hooks/useLocalMedia";
 import { cn } from "@/lib/utils";
 import type { Participant } from "@/types";
-import { ScreenShareStage } from "./ScreenShareStage";
 import { VideoTile } from "./VideoTile";
 
 interface VideoWallProps {
@@ -10,7 +9,6 @@ interface VideoWallProps {
   participants: Participant[];
   localStream: MediaStream | null;
   localStatus: MediaStatus;
-  screenStream: MediaStream | null;
   /** Streams received over WebRTC, by peer id. */
   remoteStreams: Record<string, MediaStream>;
   linkStates: Record<string, RTCPeerConnectionState>;
@@ -55,7 +53,6 @@ export function VideoWall({
   participants,
   localStream,
   localStatus,
-  screenStream,
   remoteStreams,
   linkStates,
 }: VideoWallProps) {
@@ -63,44 +60,41 @@ export function VideoWall({
   const isAlone = participants.length <= 1;
 
   return (
-    <div className="flex min-h-full flex-col justify-center gap-14">
-      {screenStream && <ScreenShareStage stream={screenStream} />}
-      <div className="flex flex-col items-center gap-6">
-        <ul
-          aria-label="Participants"
-          className={cn(
-            "mx-auto flex w-full flex-wrap justify-center gap-x-8 gap-y-12",
-            layout.wall,
-          )}
-        >
-          {participants.map((participant, index) => (
-            <li key={participant.id} className={layout.tile}>
-              <VideoTile
-                participant={participant}
-                index={index}
-                stream={
-                  participant.isLocal
-                    ? localStream
-                    : remoteStreams[participant.id]
-                }
-                mediaStatus={participant.isLocal ? localStatus : undefined}
-                linkState={linkStates[participant.id]}
-              />
-            </li>
-          ))}
-        </ul>
-        {isAlone && (
-          <output>
-            <Sticker tone="cream" className="-rotate-2 px-3 py-2 text-sm">
-              <span
-                aria-hidden
-                className="size-2 animate-blink rounded-full bg-tomato"
-              />
-              waiting for others to join…
-            </Sticker>
-          </output>
+    <div className="flex min-h-full flex-col items-center justify-center gap-6">
+      <ul
+        aria-label="Participants"
+        className={cn(
+          "mx-auto flex w-full flex-wrap justify-center gap-x-8 gap-y-12",
+          layout.wall,
         )}
-      </div>
+      >
+        {participants.map((participant, index) => (
+          <li key={participant.id} className={layout.tile}>
+            <VideoTile
+              participant={participant}
+              index={index}
+              stream={
+                participant.isLocal
+                  ? localStream
+                  : remoteStreams[participant.id]
+              }
+              mediaStatus={participant.isLocal ? localStatus : undefined}
+              linkState={linkStates[participant.id]}
+            />
+          </li>
+        ))}
+      </ul>
+      {isAlone && (
+        <output>
+          <Sticker tone="cream" className="-rotate-2 px-3 py-2 text-sm">
+            <span
+              aria-hidden
+              className="size-2 animate-blink rounded-full bg-tomato"
+            />
+            waiting for others to join…
+          </Sticker>
+        </output>
+      )}
     </div>
   );
 }

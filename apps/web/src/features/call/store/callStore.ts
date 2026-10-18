@@ -1,5 +1,6 @@
 import type { PeerInfo, PeerMediaState } from "@vidbase/shared";
 import { create } from "zustand";
+import type { ChatMessage } from "@/types";
 
 export type RoomStatus =
   | "idle"
@@ -21,20 +22,20 @@ interface CallState {
   self: PeerInfo | null;
   /** Everyone else in the room. */
   peers: PeerInfo[];
-  /** Who was inside when we were turned away from a full room. */
-  occupants: PeerInfo[];
   /** Goes up on every (re)join, so WebRTC knows to start a fresh mesh. */
   joinId: number;
   /** Video/audio received from each peer, by peer id. */
   remoteStreams: Record<string, MediaStream>;
   /** WebRTC connection state to each peer, by peer id. */
   linkStates: Record<string, RTCPeerConnectionState>;
+  /** In-call chat since you joined (there's no history from before). */
+  chat: ChatMessage[];
 }
 
 interface CallActions {
   startConnecting: (roomId: string) => void;
   joined: (self: PeerInfo, peers: PeerInfo[]) => void;
-  roomFull: (occupants: PeerInfo[]) => void;
+  roomFull: () => void;
   invalidRoom: () => void;
   connectionLost: () => void;
   peerJoined: (peer: PeerInfo) => void;
@@ -44,6 +45,7 @@ interface CallActions {
   setRemoteStream: (peerId: string, stream: MediaStream) => void;
   setLinkState: (peerId: string, state: RTCPeerConnectionState) => void;
   clearMedia: () => void;
+  addChatMessage: (message: ChatMessage) => void;
   reset: () => void;
 }
 
@@ -53,11 +55,13 @@ const initialState: CallState = {
   isReconnecting: false,
   self: null,
   peers: [],
-  occupants: [],
   joinId: 0,
   remoteStreams: {},
   linkStates: {},
+  chat: [],
 };
+
+const MAX_CHAT_MESSAGES = 200;
 
 function without<T>(record: Record<string, T>, key: string) {
   const { [key]: _removed, ...rest } = record;
@@ -80,12 +84,10 @@ export const useCallStore = create<CallState & CallActions>()((set) => ({
       isReconnecting: false,
       self,
       peers,
-      occupants: [],
       joinId: state.joinId + 1,
     })),
 
-  roomFull: (occupants) =>
-    set({ status: "full", isReconnecting: false, peers: [], occupants }),
+  roomFull: () => set({ status: "full", isReconnecting: false, peers: [] }),
 
   invalidRoom: () => set({ status: "invalid" }),
 
@@ -130,6 +132,11 @@ export const useCallStore = create<CallState & CallActions>()((set) => ({
     })),
 
   clearMedia: () => set({ remoteStreams: {}, linkStates: {} }),
+
+  addChatMessage: (message) =>
+    set((state) => ({
+      chat: [...state.chat.slice(-(MAX_CHAT_MESSAGES - 1)), message],
+    })),
 
   reset: () => set(initialState),
 }));

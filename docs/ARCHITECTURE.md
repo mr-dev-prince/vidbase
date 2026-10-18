@@ -2,7 +2,7 @@
 
 vidbase is a video-call app. Someone creates a room, shares the room code, and up to **5 people** join the same call. This doc explains how the pieces fit together.
 
-> **Status:** people in a room see and hear each other live over WebRTC, and see each other's mic/camera/hand state. Every browser connects directly to every other browser (a "mesh").
+> **Status:** people in a room see and hear each other live over WebRTC (camera + mic only), see each other's mic/camera/hand state and who's talking, and can chat and throw emoji reactions. Every browser connects directly to every other browser (a "mesh").
 
 ---
 
@@ -78,13 +78,14 @@ flowchart TD
 
 - **`lib/socket.ts`** creates the single Socket.IO connection, pointed at `NEXT_PUBLIC_SIGNALING_URL`.
 - **`services/roomSession.ts`** joins and leaves rooms, listens for server events and turns them into store updates. Components never touch the socket directly.
-- **`store/callStore.ts`** is a [Zustand](https://zustand.docs.pmnd.rs) store. It only holds data (who's in the room, the connection status) plus simple setters.
+- **`store/callStore.ts`** is a [Zustand](https://zustand.docs.pmnd.rs) store. It only holds data (who's in the room, the connection status, the chat) plus simple setters.
 - **`CallRoom`** shows a loader, the call, the "room full" screen or a connection problem, depending on the store's `status`.
 - **`CallSession`** is the call UI. It asks for your camera **only after** the server has given you a seat, and it reports your mic/camera/hand changes through `shareMediaState()`.
-- **`VideoWall`** shows only the people who are in the room, in the order they joined. The grid changes with headcount: 1 person gets one big tile with a "waiting for others to join…" note under it, 2 sit side by side, 3–4 make two rows of two, and 5 make a row of three over a row of two. Your screen share, when on, sits above the grid.
+- **`VideoWall`** shows only the people who are in the room, in the order they joined. The grid changes with headcount: 1 person gets one big tile with a "waiting for others to join…" note under it, 2 sit side by side, 3–4 make two rows of two, and 5 make a row of three over a row of two.
 - **`CallTopBar`** shows the room code and a **copy link** button. The code chip copies just the code (for typing into "join with code" on the home page). The link button copies `<site>/call/<code>`; opening that link drops a friend straight into the call.
-- **`ControlDock`** (mic, camera, share, hand, reactions, chat, people, leave) is a vertical bar on the right edge on tablets and desktops, and a row along the bottom on phones.
+- **`ControlDock`** (mic, camera, hand, reactions, chat, people, leave) is a vertical bar on the right edge on tablets and desktops, and a row along the bottom on phones. The chat button gets a red dot when messages arrive while the chat is closed.
 - **`hooks/usePeerMesh.ts`** runs WebRTC while you're in the call: it creates the mesh, feeds it your camera, and connects it to the socket and the store (section 7).
+- **`hooks/useSpeakingPeers.ts`** measures how loud each person's audio is and reports who's talking, which lights up their tile (section 7.6).
 - **`RemoteAudio`** plays everyone's voice through hidden `<audio>` elements (section 7).
 - **`services/guestProfile.ts`** gives you a random name and color (like "Groovy Llama"), kept per browser tab. A second tab acts as a different person, which makes local testing easy.
 
@@ -118,10 +119,15 @@ sequenceDiagram
     S->>O: peer:joined (you)
     Note over B: now asks for the camera and shows the call
   else 5 people already inside
-    S-->>B: full + who is inside
+    S-->>B: full (no names: who's inside stays private)
     Note over B: shows "Room's full!" and disconnects
+  else joining too fast from this network
+    S-->>B: rate-limited
+    Note over B: shows "reconnecting" and asks again after 5 s
   end
 ```
+
+**Room codes** look like `wobbly-mango-k7f3q9`: two words plus 6 random characters (no `0`/`o`/`1`/`l`, so they're easy to read out). The code is the only key to a room, so it's made with the browser's secure random generator and has about 900 billion possibilities. Together with the join rate limit (section 8), guessing one isn't practical.
 
 The browser sends `room:join` **every time** the socket connects, not just the first time. So if the connection drops and Socket.IO reconnects by itself, you rejoin automatically with your current mic/camera state.
 
@@ -137,6 +143,27 @@ sequenceDiagram
   S->>B: peer:updated (A, now muted)
   Note over B: A's tile shows the muted icon
 ```
+
+### Chat and reactions
+
+Chat messages and emoji reactions go through the signaling server too (not over WebRTC). You see your own message or emoji right away; the server passes it on to everyone else.
+
+```mermaid
+sequenceDiagram
+  participant A as Browser A
+  participant S as Signaling server
+  participant B as Browser B
+  Note over A: shows "hi" in A's own chat
+  A->>S: chat:send "hi"
+  S->>S: check it (not empty, ≤ 280 chars), look up A's name and color
+  S->>B: chat:message { author: A, text: "hi" }
+  A->>S: reaction:send 🔥
+  S->>S: check it's one of the six allowed emoji
+  S->>B: reaction { from: A, emoji: 🔥 }
+```
+
+- The server fills in the author itself, so nobody can send messages under someone else's name.
+- Nothing is stored on the server. If you join late you only see messages sent after you arrived.
 
 ## 6. Leaving
 
@@ -205,6 +232,8 @@ WebRTC calls are asynchronous. If an ICE candidate is applied before the offer h
 
 Every `<video>` element is muted, so your own mic never echoes back and tiles can swap to an avatar freely. Other people's sound plays through **hidden `<audio>` elements** in `RemoteAudio`, one per person, so you still hear someone whose camera is off.
 
+**Who's talking** is worked out in each browser: `useSpeakingPeers` feeds every stream (yours and everyone else's) into a Web Audio `AnalyserNode` and checks the loudness 10 times a second. Above a small threshold, that person's tile gets a green ring and moving bars; the ring stays on for 0.4 s after they go quiet so it doesn't flicker between words. A muted mic sends silence, so it never lights up.
+
 Browsers block sound until you've interacted with the page. If playback is blocked (e.g. you opened a shared link directly), a **"Tap to hear everyone"** button appears, and one click starts all audio.
 
 ### 7.7 When things go wrong
@@ -231,27 +260,65 @@ On some networks (strict firewalls, "symmetric" NATs) no direct path exists at a
 flowchart TD
   index["index.ts<br/>HTTP server + Socket.IO + /health"] --> roomH["handlers/roomHandlers.ts<br/>join · leave · update"]
   index --> sigH["handlers/signalHandlers.ts<br/>relay offer/answer/ICE"]
+  index --> msgH["handlers/messageHandlers.ts<br/>relay chat + reactions"]
+  index --> rl["rateLimits.ts<br/>per-IP + per-socket limits"]
   roomH --> val["validation.ts<br/>checks every incoming message"]
   sigH --> val
+  msgH --> val
   roomH --> reg["RoomRegistry.ts<br/>who is in which room (in memory)"]
   sigH --> reg
+  msgH --> reg
 ```
 
 - **`RoomRegistry`** keeps rooms in memory and enforces the 5-person limit. It knows nothing about sockets, so it's easy to follow.
 - **`validation.ts`** treats every message from a browser as untrusted. Bad room codes, wrong types or oversized messages are rejected.
+- **`rateLimits.ts`** stops any one client from flooding the server or a room (see below).
 - Because rooms live in memory, run **one** server instance. Running several would need a shared store (e.g. the Socket.IO Redis adapter).
+
+### Rate limits
+
+Every limit is a **token bucket**: you start with a few tokens (the burst), each action uses one, and they slowly come back. Short bursts are fine; a steady flood is not.
+
+| What | Counted per | Burst | Refill |
+| --- | --- | --- | --- |
+| Open connections | IP | 20 at once | n/a |
+| New connections | IP | 20 | 1 every 3 s |
+| `room:join` | IP | 10 | 1 every 2 s |
+| `chat:send` | socket | 5 | 1 per s |
+| `reaction:send` | socket | 10 | 5 per s |
+| `peer:update` | socket | 10 | 5 per s |
+| `signal` | socket | 200 | 50 per s |
+
+- Connections and joins are counted **per IP**, because reconnecting gives you a new socket and would otherwise reset the count. Messages are counted **per socket**; that's enough since every socket has to join through the IP limit first.
+- Over the limit, messages are dropped silently. A refused connection or join makes the browser show "reconnecting" and try again after 5 seconds.
+- **Finding the real IP:** in production every connection comes from `cloudflared` on the same machine, so the server reads the `cf-connecting-ip` header that Cloudflare adds. It only trusts that header on connections from `localhost`, so nobody connecting directly can fake it.
+- The browser also keeps at most 30 floating emoji on screen.
+
+```mermaid
+flowchart LR
+  c["new connection"] --> ip{"too many from<br/>this IP?"}
+  ip -- yes --> refuse["refused<br/>(browser retries in 5 s)"]
+  ip -- no --> sock["socket gets its own<br/>chat / reaction / update / signal buckets"]
+  sock --> msg{"bucket empty?"}
+  msg -- yes --> drop["message dropped"]
+  msg -- no --> handle["handled as normal"]
+```
 
 ### Events
 
 | Event | Direction | What it means |
 | --- | --- | --- |
-| `room:join` | browser → server | "Give me a seat." The server replies with ok/full. |
+| `room:join` | browser → server | "Give me a seat." The server replies ok, full or rate-limited. |
 | `room:leave` | browser → server | "I'm leaving." |
 | `peer:update` | browser → server | "My mic/camera/hand changed." |
 | `signal` | both ways | A WebRTC offer, answer or ICE candidate for one specific peer. |
 | `peer:joined` | server → browser | Someone joined your room. |
 | `peer:left` | server → browser | Someone left your room. |
 | `peer:updated` | server → browser | Someone's mic/camera/hand changed. |
+| `chat:send` | browser → server | "Send this chat message to the room." |
+| `chat:message` | server → browser | A chat message from someone else, with their name and color. |
+| `reaction:send` | browser → server | "I threw this emoji." |
+| `reaction` | server → browser | Someone else threw an emoji. |
 
 All of these are typed in `packages/shared/src/signaling.ts`.
 
@@ -303,9 +370,7 @@ The signaling server is not tied to the Pi: any host that keeps a Bun process ru
 
 ## 11. Not built yet
 
-- **Screen sharing to others.** Your screen share only shows on your own screen; it isn't sent over WebRTC yet.
-- **Real "speaking" detection.** The speaking indicator isn't driven by actual audio levels.
 - **TURN by default.** Calls between some strict networks can fail until a TURN server is configured.
-- **In-call chat** is local only and isn't sent to anyone.
+- **Chat history.** Chat isn't stored, so people who join late don't see earlier messages.
 - **Accounts.** Names are random per tab. There is no database on purpose: everything in a call is short-lived (see decision #15).
 - **Live streaming pages** (`/studio`, `/live/...`) still use placeholder data.

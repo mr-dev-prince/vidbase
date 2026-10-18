@@ -2,11 +2,14 @@
 // typed value, or null when the input is malformed.
 
 import {
+  CHAT_MESSAGE_MAX_LENGTH,
   DISPLAY_NAME_MAX_LENGTH,
   isAccent,
+  isReactionEmoji,
   isValidRoomId,
   type JoinRoomRequest,
   type PeerMediaState,
+  type ReactionEmoji,
   type SignalPayload,
 } from "@vidbase/shared";
 
@@ -99,4 +102,15 @@ export function parseSignalMessage(
   }
 
   return null;
+}
+
+/** Trimmed chat text, or null when empty or too long. */
+export function parseChatText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text && text.length <= CHAT_MESSAGE_MAX_LENGTH ? text : null;
+}
+
+export function parseReaction(value: unknown): ReactionEmoji | null {
+  return isReactionEmoji(value) ? value : null;
 }

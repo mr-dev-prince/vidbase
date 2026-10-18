@@ -60,3 +60,21 @@
     - Why: Vercel needs to issue the HTTPS certificate and runs its own CDN; putting Cloudflare's proxy in front can block the certificate and adds a second cache.
 27. **Add a separate "copy link" button to the call top bar that copies `<origin>/call/<roomId>`; the code chip keeps copying just the code (#26)**
     - Why: opening `/call/<roomId>` already joins the room, so a link lets friends hop in with one click; the link is built from `window.location.origin` (no site-URL env var needed), and dropping the page's query/hash keeps it clean.
+30. **Drop screen sharing; calls stream only camera + mic**
+    - Why: it's a learning project, not a full product; the share was only ever shown locally (never sent over WebRTC), so removing it deletes UI and state without touching the connection code.
+31. **In-call chat and reactions go through the signaling server (`chat:send` → `chat:message`, `reaction:send` → `reaction`), not WebRTC data channels**
+    - Why: the socket is already open and the server knows who's in the room, so it can fill in the author (no faking names), cap length (280 chars) and allow only the six reaction emoji; data channels would need one per peer and their own checks.
+32. **The sender shows their own chat message/reaction immediately; the server relays only to others (no echo), and there's no chat history for latecomers**
+    - Why: instant feedback with no round trip, and no message store on the server, which keeps it stateless beyond the room list (see #15).
+33. **"Who's speaking" is measured in the browser with a Web Audio `AnalyserNode` per stream (RMS > 0.02, held 400 ms), polled every 100 ms**
+    - Why: works the same for your own mic and remote streams with no extra signaling; a muted mic sends silence so it never lights up; the hold stops the ring flickering between words.
+34. **Room codes are `adjective-noun-xxxxxx` (32 × 32 words + 6 chars from a 31-letter alphabet without 0/o/1/l), picked with `crypto.getRandomValues`**
+    - Why: the code is the only key to a room; the old `word-word-NN` format had just 5,760 options and used `Math.random`. ~900 billion options plus the join limit (#36) makes guessing hopeless; old codes still work since the format check is unchanged.
+35. **A full room answers just `full`, without the names of who's inside**
+    - Why: anyone with (or guessing) a code could see who was in a call; the count is always the max, so the "room full" screen shows faceless seats.
+36. **Token-bucket rate limits in the signaling server: per IP for connections (20 open, burst 20, +1 per 3 s) and `room:join` (burst 10, +1 per 2 s); per socket for chat (5, +1/s), reactions (10, +5/s), `peer:update` (10, +5/s) and `signal` (200, +50/s)**
+    - Why: reconnecting gives a fresh socket, so joins and connections must be limited per IP to stop code guessing and connection floods; per-socket limits are enough for messages because every socket has to join through the IP limit. Over-limit messages are dropped silently; a limited join gets a `rate-limited` reply and the browser retries after 5 s.
+37. **Read the client IP from `cf-connecting-ip` only when the connection comes from loopback**
+    - Why: in production every connection arrives from `cloudflared` on the Pi, so the socket address alone would put all users behind one IP; trusting the header only on loopback stops anyone who reaches the server directly from faking it, with no config needed.
+38. **Cap floating reactions at 30 on screen in the browser**
+    - Why: the server limit is per socket, so several sockets (or IPs) can still add up to a flood; dropping the oldest emoji keeps the page from freezing.

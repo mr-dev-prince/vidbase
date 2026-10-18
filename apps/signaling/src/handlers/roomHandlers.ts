@@ -1,6 +1,7 @@
 import type { PeerInfo } from "@vidbase/shared";
 import { log } from "../logger";
 import type { RoomRegistry } from "../RoomRegistry";
+import type { SocketLimits } from "../rateLimits";
 import type { SignalingSocket } from "../types";
 import { parseJoinRequest, parseMediaPatch } from "../validation";
 
@@ -8,6 +9,7 @@ import { parseJoinRequest, parseMediaPatch } from "../validation";
 export function registerRoomHandlers(
   socket: SignalingSocket,
   rooms: RoomRegistry,
+  limits: SocketLimits,
 ) {
   const leaveCurrentRoom = () => {
     const { roomId } = socket.data;
@@ -22,6 +24,11 @@ export function registerRoomHandlers(
 
   socket.on("room:join", (rawRequest, ack) => {
     if (typeof ack !== "function") return;
+    if (!limits.join.take()) {
+      log.info(`${socket.id} (${socket.data.ip}) is joining too fast`);
+      ack({ ok: false, reason: "rate-limited" });
+      return;
+    }
 
     const request = parseJoinRequest(rawRequest);
     if (!request) {
@@ -43,7 +50,7 @@ export function registerRoomHandlers(
 
     if (!outcome.ok) {
       log.info(`${socket.id} turned away from full room ${request.roomId}`);
-      ack({ ok: false, reason: "full", peers: outcome.peers });
+      ack({ ok: false, reason: "full" });
       return;
     }
 
@@ -60,6 +67,7 @@ export function registerRoomHandlers(
   socket.on("disconnect", leaveCurrentRoom);
 
   socket.on("peer:update", (rawPatch) => {
+    if (!limits.mediaUpdate.take()) return;
     const { roomId } = socket.data;
     const patch = parseMediaPatch(rawPatch);
     if (!roomId || !patch) return;

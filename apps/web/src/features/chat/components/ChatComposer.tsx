@@ -1,5 +1,6 @@
 "use client";
 
+import { CHAT_MESSAGE_MAX_LENGTH } from "@vidbase/shared";
 import { SendHorizontal } from "lucide-react";
 import { useId } from "react";
 import { IconButton } from "@/components/ui/IconButton";
@@ -39,7 +40,7 @@ export function ChatComposer({
         name="message"
         placeholder={placeholder}
         autoComplete="off"
-        maxLength={280}
+        maxLength={CHAT_MESSAGE_MAX_LENGTH}
         required
         disabled={disabled}
         className="h-11"

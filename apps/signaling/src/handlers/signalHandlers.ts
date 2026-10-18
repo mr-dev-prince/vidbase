@@ -1,4 +1,5 @@
 import type { RoomRegistry } from "../RoomRegistry";
+import type { SocketLimits } from "../rateLimits";
 import type { SignalingSocket } from "../types";
 import { parseSignalMessage } from "../validation";
 
@@ -9,8 +10,10 @@ import { parseSignalMessage } from "../validation";
 export function registerSignalHandlers(
   socket: SignalingSocket,
   rooms: RoomRegistry,
+  limits: SocketLimits,
 ) {
   socket.on("signal", (rawMessage) => {
+    if (!limits.signal.take()) return;
     const { roomId } = socket.data;
     const message = parseSignalMessage(rawMessage);
     if (!roomId || !message) return;

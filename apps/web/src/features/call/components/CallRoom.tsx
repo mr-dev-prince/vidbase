@@ -16,19 +16,12 @@ import { RoomFull } from "./RoomFull";
 export function CallRoom({ roomId }: { roomId: string }) {
   useRoomSession(roomId);
   const status = useCallStore((state) => state.status);
-  const occupants = useCallStore((state) => state.occupants);
 
   switch (status) {
     case "joined":
       return <CallSession roomId={roomId} />;
     case "full":
-      return (
-        <RoomFull
-          roomId={roomId}
-          occupants={occupants}
-          onKnockAgain={knockAgain}
-        />
-      );
+      return <RoomFull roomId={roomId} onKnockAgain={knockAgain} />;
     case "unreachable":
     case "invalid":
       return <ConnectionProblem problem={status} roomId={roomId} />;

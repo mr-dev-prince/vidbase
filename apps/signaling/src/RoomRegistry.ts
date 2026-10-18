@@ -2,7 +2,7 @@ import type { PeerInfo, PeerMediaState } from "@vidbase/shared";
 
 export type JoinOutcome =
   | { ok: true; peers: PeerInfo[] }
-  | { ok: false; reason: "full"; peers: PeerInfo[] };
+  | { ok: false; reason: "full" };
 
 /**
  * Who is in which room, kept in memory.
@@ -19,7 +19,7 @@ export class RoomRegistry {
     const others = [...room.values()].filter(({ id }) => id !== peer.id);
 
     if (!room.has(peer.id) && room.size >= this.capacity) {
-      return { ok: false, reason: "full", peers: others };
+      return { ok: false, reason: "full" };
     }
 
     room.set(peer.id, peer);
@@ -44,6 +44,10 @@ export class RoomRegistry {
     const updated = { ...peer, ...patch };
     room.set(peerId, updated);
     return updated;
+  }
+
+  get(roomId: string, peerId: string) {
+    return this.rooms.get(roomId)?.get(peerId);
   }
 
   isInRoom(roomId: string, peerId: string) {

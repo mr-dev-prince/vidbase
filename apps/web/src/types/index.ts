@@ -37,6 +37,8 @@ export interface ChatMessage {
   author: Person;
   text: string;
   kind?: ChatMessageKind;
+  /** Set when we know who sent it (calls); otherwise matched by name. */
+  isMine?: boolean;
 }
 
 /** A chat message before it has been given an id. */

@@ -51,7 +51,10 @@ export function ChatFeed({
     >
       {messages.map((message) => (
         <li key={message.id} className="flex flex-col">
-          <Message message={message} isMine={message.author.name === meName} />
+          <Message
+            message={message}
+            isMine={message.isMine ?? message.author.name === meName}
+          />
         </li>
       ))}
     </ol>

@@ -7,9 +7,6 @@ const person = (name: string, accent: Accent): Person => ({ name, accent });
 export const ME = person("You", "lime");
 export const SYSTEM = person("vidbase", "sun");
 
-const JUNO = person("Juno Park", "grape");
-const DEV = person("Dev Okafor", "cobalt");
-
 export const BROADCASTS: Broadcast[] = [
   {
     id: "late-night-synth-jam",
@@ -70,17 +67,6 @@ export const BROADCASTS: Broadcast[] = [
 export function getBroadcast(id: string) {
   return BROADCASTS.find((broadcast) => broadcast.id === id);
 }
-
-export const CALL_CHAT_SEED: ChatMessage[] = [
-  {
-    id: "call-seed-1",
-    kind: "system",
-    author: SYSTEM,
-    text: "Room created. Be weird, be kind.",
-  },
-  { id: "call-seed-2", author: JUNO, text: "is my mic working??" },
-  { id: "call-seed-3", author: DEV, text: "yes juno, we can hear the blender" },
-];
 
 export const STREAM_CHAT_SEED: ChatMessage[] = [
   {

@@ -1,9 +1,9 @@
+import type { ReactionEmoji } from "@vidbase/shared";
 import {
   Hand,
   MessageCircle,
   Mic,
   MicOff,
-  MonitorUp,
   PhoneOff,
   Users,
   Video,
@@ -17,14 +17,14 @@ import { ReactionPicker } from "./ReactionPicker";
 interface ControlDockProps {
   isMicOn: boolean;
   isCamOn: boolean;
-  isScreenSharing: boolean;
   isHandRaised: boolean;
+  /** New chat messages since you last had the chat open. */
+  hasUnreadChat: boolean;
   openPanel: CallPanel | null;
   onToggleMic: () => void;
   onToggleCam: () => void;
-  onToggleScreenShare: () => void;
   onToggleHand: () => void;
-  onReact: (emoji: string) => void;
+  onReact: (emoji: ReactionEmoji) => void;
   onTogglePanel: (panel: CallPanel) => void;
   onLeave: () => void;
   className?: string;
@@ -39,12 +39,11 @@ const ICON = "size-5";
 export function ControlDock({
   isMicOn,
   isCamOn,
-  isScreenSharing,
   isHandRaised,
+  hasUnreadChat,
   openPanel,
   onToggleMic,
   onToggleCam,
-  onToggleScreenShare,
   onToggleHand,
   onReact,
   onTogglePanel,
@@ -78,17 +77,6 @@ export function ControlDock({
           isCamOn ? <Video className={ICON} /> : <VideoOff className={ICON} />
         }
       />
-      {/* Screen sharing isn't available on phones. */}
-      <div className="hidden sm:block">
-        <IconButton
-          tooltipSide="left-md"
-          label={isScreenSharing ? "Stop sharing" : "Share screen"}
-          tone={isScreenSharing ? "mint" : "cream"}
-          aria-pressed={isScreenSharing}
-          onClick={onToggleScreenShare}
-          icon={<MonitorUp className={ICON} />}
-        />
-      </div>
 
       <Divider />
 
@@ -104,14 +92,22 @@ export function ControlDock({
 
       <Divider />
 
-      <IconButton
-        tooltipSide="left-md"
-        label="Chat"
-        tone={openPanel === "chat" ? "grape" : "cream"}
-        aria-pressed={openPanel === "chat"}
-        onClick={() => onTogglePanel("chat")}
-        icon={<MessageCircle className={ICON} />}
-      />
+      <div className="relative">
+        <IconButton
+          tooltipSide="left-md"
+          label={hasUnreadChat ? "Chat (new messages)" : "Chat"}
+          tone={openPanel === "chat" ? "grape" : "cream"}
+          aria-pressed={openPanel === "chat"}
+          onClick={() => onTogglePanel("chat")}
+          icon={<MessageCircle className={ICON} />}
+        />
+        {hasUnreadChat && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -top-1 -right-1 size-4 animate-bounce-blob rounded-full border-2 border-ink bg-tomato"
+          />
+        )}
+      </div>
       <IconButton
         tooltipSide="left-md"
         label="People"

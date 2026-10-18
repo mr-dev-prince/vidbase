@@ -17,7 +17,7 @@ const COPY = {
     badge: "huh?",
     title: "That's not",
     outline: "a room code",
-    body: "Room codes are lowercase words and numbers joined by dashes, like wobbly-mango-42.",
+    body: "Room codes are lowercase words and numbers joined by dashes, like wobbly-mango-k7f3q9.",
   },
 } as const;
 

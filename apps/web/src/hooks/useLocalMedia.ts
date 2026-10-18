@@ -16,12 +16,11 @@ async function requestCameraAndMic() {
 }
 
 /**
- * Owns the local camera/mic stream and an optional screen share.
+ * Owns the local camera/mic stream.
  * Media is requested on mount and released on unmount.
  */
 export function useLocalMedia() {
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [status, setStatus] = useState<MediaStatus>("requesting");
   const [isMicOn, setMicOn] = useState(true);
   const [isCamOn, setCamOn] = useState(true);
@@ -60,37 +59,12 @@ export function useLocalMedia() {
     for (const track of stream?.getVideoTracks() ?? []) track.enabled = isCamOn;
   }, [stream, isCamOn]);
 
-  // Stop a screen share when it is replaced or the component unmounts.
-  useEffect(() => () => stopTracks(screenStream), [screenStream]);
-
-  const toggleScreenShare = async () => {
-    if (screenStream) {
-      setScreenStream(null);
-      return;
-    }
-    try {
-      const display = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-      });
-      // The browser's own "Stop sharing" button ends the track.
-      display
-        .getVideoTracks()[0]
-        ?.addEventListener("ended", () => setScreenStream(null));
-      setScreenStream(display);
-    } catch {
-      // The user dismissed the picker, or screen sharing is unsupported.
-    }
-  };
-
   return {
     stream,
-    screenStream,
     status,
     isMicOn,
     isCamOn,
-    isScreenSharing: screenStream !== null,
     toggleMic: () => setMicOn((on) => !on),
     toggleCam: () => setCamOn((on) => !on),
-    toggleScreenShare,
   };
 }

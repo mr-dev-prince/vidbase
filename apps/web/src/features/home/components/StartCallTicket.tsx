@@ -42,7 +42,7 @@ export function StartCallTicket() {
         <TextField
           id="room-code"
           name="room"
-          placeholder="wobbly-mango-42"
+          placeholder="wobbly-mango-k7f3q9"
           autoComplete="off"
           required
           className="flex-1 basis-44"
