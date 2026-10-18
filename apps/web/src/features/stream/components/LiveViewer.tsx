@@ -89,7 +89,7 @@ export function LiveViewer({ streamId }: { streamId: string }) {
 
       <Receipt
         title="live chat"
-        className="h-[34rem] lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)]"
+        className="h-136 lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)]"
       >
         <ChatPanel
           variant="receipt"

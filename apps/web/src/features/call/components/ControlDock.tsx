@@ -55,7 +55,7 @@ export function ControlDock({
       role="toolbar"
       aria-label="Call controls"
       className={cn(
-        "flex w-max max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-center gap-1 rounded-[2rem] border-[3px] border-ink bg-sun p-2 shadow-hard-lg sm:gap-3 sm:p-3 md:max-w-none md:flex-col md:flex-nowrap",
+        "flex w-max max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-center gap-1 rounded-4xl border-[3px] border-ink bg-sun p-2 shadow-hard-lg sm:gap-3 sm:p-3 md:max-w-none md:flex-col md:flex-nowrap",
         className,
       )}
     >
