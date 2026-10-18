@@ -1,15 +1,13 @@
+import { Sticker } from "@/components/ui/Sticker";
 import type { MediaStatus } from "@/hooks/useLocalMedia";
 import { cn } from "@/lib/utils";
 import type { Participant } from "@/types";
-import { EmptySeat } from "./EmptySeat";
 import { ScreenShareStage } from "./ScreenShareStage";
 import { VideoTile } from "./VideoTile";
 
 interface VideoWallProps {
-  roomId: string;
+  /** Everyone in the call, in the order they joined. */
   participants: Participant[];
-  /** Total seats in the room; free ones are shown as open seats. */
-  capacity: number;
   localStream: MediaStream | null;
   localStatus: MediaStatus;
   screenStream: MediaStream | null;
@@ -18,60 +16,91 @@ interface VideoWallProps {
   linkStates: Record<string, RTCPeerConnectionState>;
 }
 
-function columnsFor(seats: number) {
-  if (seats <= 1) return "max-w-2xl";
-  if (seats <= 4) return "max-w-5xl sm:grid-cols-2";
-  return "max-w-7xl sm:grid-cols-2 xl:grid-cols-3";
+/**
+ * How the wall is laid out for a given number of people: `wall` caps the
+ * total width so the tiles fit the screen's height, `tile` sets each tile's
+ * width (columns). Rows are centered, so an odd one out sits in the middle.
+ */
+function layoutFor(count: number) {
+  // 1 person: one big tile (with room below it for the waiting note).
+  if (count <= 1) {
+    return {
+      wall: "max-w-[clamp(20rem,calc((100dvh_-_20rem)_*_4/3),56rem)]",
+      tile: "w-full",
+    };
+  }
+  // 2 people: side by side.
+  if (count === 2) {
+    return {
+      wall: "max-w-[clamp(20rem,calc((100dvh_-_16rem)_*_8/3_+_2rem),80rem)]",
+      tile: "w-full sm:w-[calc(50%_-_1rem)]",
+    };
+  }
+  // 3–4 people: two rows of two.
+  if (count <= 4) {
+    return {
+      wall: "max-w-[clamp(20rem,calc((100dvh_-_24rem)_*_4/3_+_2rem),64rem)]",
+      tile: "w-full sm:w-[calc(50%_-_1rem)]",
+    };
+  }
+  // 5 people: three on top, two below.
+  return {
+    wall: "max-w-[clamp(20rem,calc((100dvh_-_24rem)_*_2_+_4rem),80rem)]",
+    tile: "w-full sm:w-[calc(50%_-_1rem)] lg:w-[calc((100%_-_4rem)/3)]",
+  };
 }
 
 /** Everyone in the call, pinned up like photos on a corkboard. */
 export function VideoWall({
-  roomId,
   participants,
-  capacity,
   localStream,
   localStatus,
   screenStream,
   remoteStreams,
   linkStates,
 }: VideoWallProps) {
-  const openSeats = Array.from(
-    { length: Math.max(0, capacity - participants.length) },
-    (_, i) => participants.length + i,
-  );
+  const layout = layoutFor(participants.length);
+  const isAlone = participants.length <= 1;
 
   return (
-    <div className="flex flex-col gap-14">
+    <div className="flex min-h-full flex-col justify-center gap-14">
       {screenStream && <ScreenShareStage stream={screenStream} />}
-      {/* The layout is sized for a full room, so it doesn't jump as people join. */}
-      <ul
-        aria-label="Participants"
-        className={cn(
-          "mx-auto grid w-full gap-x-8 gap-y-12",
-          columnsFor(capacity),
+      <div className="flex flex-col items-center gap-6">
+        <ul
+          aria-label="Participants"
+          className={cn(
+            "mx-auto flex w-full flex-wrap justify-center gap-x-8 gap-y-12",
+            layout.wall,
+          )}
+        >
+          {participants.map((participant, index) => (
+            <li key={participant.id} className={layout.tile}>
+              <VideoTile
+                participant={participant}
+                index={index}
+                stream={
+                  participant.isLocal
+                    ? localStream
+                    : remoteStreams[participant.id]
+                }
+                mediaStatus={participant.isLocal ? localStatus : undefined}
+                linkState={linkStates[participant.id]}
+              />
+            </li>
+          ))}
+        </ul>
+        {isAlone && (
+          <output>
+            <Sticker tone="cream" className="-rotate-2 px-3 py-2 text-sm">
+              <span
+                aria-hidden
+                className="size-2 animate-blink rounded-full bg-tomato"
+              />
+              waiting for others to join…
+            </Sticker>
+          </output>
         )}
-      >
-        {participants.map((participant, index) => (
-          <li key={participant.id}>
-            <VideoTile
-              participant={participant}
-              index={index}
-              stream={
-                participant.isLocal
-                  ? localStream
-                  : remoteStreams[participant.id]
-              }
-              mediaStatus={participant.isLocal ? localStatus : undefined}
-              linkState={linkStates[participant.id]}
-            />
-          </li>
-        ))}
-        {openSeats.map((seatIndex) => (
-          <li key={`seat-${seatIndex}`}>
-            <EmptySeat roomId={roomId} index={seatIndex} />
-          </li>
-        ))}
-      </ul>
+      </div>
     </div>
   );
 }

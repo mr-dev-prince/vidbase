@@ -5,7 +5,11 @@ import { useState } from "react";
 import { IconButton } from "@/components/ui/IconButton";
 import { REACTION_EMOJIS } from "@/lib/reactions";
 
-/** Toggles a row of emoji. It stays open so people can spam reactions. */
+/**
+ * Toggles a row of emoji. It stays open so people can spam reactions.
+ * Opens above the button on small screens and to its left from `md` up,
+ * where the control dock is vertical.
+ */
 export function ReactionPicker({
   onReact,
 }: {
@@ -16,7 +20,7 @@ export function ReactionPicker({
   return (
     <div className="relative">
       {isOpen && (
-        <div className="absolute bottom-full left-1/2 mb-4 flex -translate-x-1/2 gap-1 rounded-full border-2 border-ink bg-cream p-1.5 shadow-hard">
+        <div className="absolute bottom-full left-1/2 mb-4 flex -translate-x-1/2 gap-1 md:top-1/2 md:right-full md:bottom-auto md:left-auto md:mr-4 md:mb-0 md:translate-x-0 md:-translate-y-1/2 rounded-full border-2 border-ink bg-cream p-1.5 shadow-hard">
           {REACTION_EMOJIS.map((emoji) => (
             <button
               key={emoji}
@@ -33,6 +37,7 @@ export function ReactionPicker({
       <IconButton
         label="React"
         tone={isOpen ? "flamingo" : "cream"}
+        tooltipSide="left-md"
         aria-expanded={isOpen}
         onClick={() => setOpen((open) => !open)}
         onKeyDown={(event) => event.key === "Escape" && setOpen(false)}

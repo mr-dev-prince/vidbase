@@ -81,6 +81,8 @@ flowchart TD
 - **`store/callStore.ts`** is a [Zustand](https://zustand.docs.pmnd.rs) store. It only holds data (who's in the room, the connection status) plus simple setters.
 - **`CallRoom`** shows a loader, the call, the "room full" screen or a connection problem, depending on the store's `status`.
 - **`CallSession`** is the call UI. It asks for your camera **only after** the server has given you a seat, and it reports your mic/camera/hand changes through `shareMediaState()`.
+- **`VideoWall`** shows only the people who are in the room, in the order they joined. The grid changes with headcount: 1 person gets one big tile with a "waiting for others to join…" note under it, 2 sit side by side, 3–4 make two rows of two, and 5 make a row of three over a row of two. Your screen share, when on, sits above the grid.
+- **`ControlDock`** (mic, camera, share, hand, reactions, chat, people, leave) is a vertical bar on the right edge on tablets and desktops, and a row along the bottom on phones.
 - **`hooks/usePeerMesh.ts`** runs WebRTC while you're in the call: it creates the mesh, feeds it your camera, and connects it to the socket and the store (section 7).
 - **`RemoteAudio`** plays everyone's voice through hidden `<audio>` elements (section 7).
 - **`services/guestProfile.ts`** gives you a random name and color (like "Groovy Llama"), kept per browser tab. A second tab acts as a different person, which makes local testing easy.

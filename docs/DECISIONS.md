@@ -46,3 +46,9 @@
     - Why: a reconnect gives you a new socket id, so others treat you as a newcomer; rebuilding is simpler than patching old connections.
 17. **`suppressHydrationWarning` on `<html>` and `<body>` in the root layout**
     - Why: the hydration error came from browser extensions adding attributes to those tags (pages hydrate cleanly in a browser without extensions); the flag only ignores those two tags' own attributes, so real mismatches inside the page still show up.
+24. **Call screen shows only joined people, in one column on the right in join order; screen share sits on the left (replaces the fixed 5-seat grid with "Seat open" placeholders)**
+    - Why: empty seats took up most of the screen in small calls; a right-hand column grows naturally as people join and leaves the main area free for the shared screen.
+25. **Reverses the column part of #24: tiles form a centered grid sized by headcount (1 big, 2 side by side, 3–4 two-by-two, 5 as 3+2); only joined people still get a tile; the control dock moves to a vertical bar on the right from `md` up (bottom row on phones)**
+    - Why: the column-on-the-right came from a misread; a grid sized by headcount fills the screen in small calls, and a side dock stops covering the tiles. The grid's max width is tied to the viewport height (`100dvh`) so every tile fits on screen without scrolling.
+26. **The room-code button in the call top bar copies just the code (e.g. `cosmic-noodle-55`), not the page URL**
+    - Why: the button shows the code, so it should copy what it shows; the code is what people type into "join with code" on the home page.

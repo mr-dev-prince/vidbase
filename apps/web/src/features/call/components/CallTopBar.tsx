@@ -24,9 +24,9 @@ export function CallTopBar({
   const isFull = peopleCount >= capacity;
   const [copied, setCopied] = useState(false);
 
-  const copyInviteLink = async () => {
+  const copyRoomCode = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(roomId);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -40,8 +40,8 @@ export function CallTopBar({
         <Logo className="text-2xl" />
         <button
           type="button"
-          onClick={copyInviteLink}
-          aria-label={`Copy invite link for room ${roomId}`}
+          onClick={copyRoomCode}
+          aria-label={`Copy room code ${roomId}`}
           className="inline-flex min-w-0 -rotate-1 items-center gap-2 rounded-lg border-2 border-ink bg-sun px-3 py-1 font-mono text-sm font-bold shadow-hard-sm transition hover:rotate-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sky"
         >
           <span className="truncate">#{roomId}</span>

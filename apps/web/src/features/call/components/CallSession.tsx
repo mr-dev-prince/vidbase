@@ -71,11 +71,9 @@ export function CallSession({ roomId }: { roomId: string }) {
 
       <div className="relative flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">
-          <main className="absolute inset-0 overflow-y-auto bg-lilac bg-dots px-5 pt-10 pb-40 sm:px-10">
+          <main className="absolute inset-0 overflow-y-auto bg-lilac bg-dots px-5 pt-10 pb-40 sm:px-10 md:pr-36 md:pb-10">
             <VideoWall
-              roomId={roomId}
               participants={participants}
-              capacity={MAX_PARTICIPANTS}
               localStream={media.stream}
               localStatus={media.status}
               screenStream={media.screenStream}
@@ -86,7 +84,7 @@ export function CallSession({ roomId }: { roomId: string }) {
           <RemoteAudio streams={Object.values(remoteStreams)} />
           <ReactionLayer reactions={reactions} />
           <ControlDock
-            className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2"
+            className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2 md:top-1/2 md:right-5 md:bottom-auto md:left-auto md:translate-x-0 md:-translate-y-1/2"
             isMicOn={media.isMicOn}
             isCamOn={media.isCamOn}
             isScreenSharing={media.isScreenSharing}
